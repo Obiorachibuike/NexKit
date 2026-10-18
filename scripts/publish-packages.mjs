@@ -4,6 +4,7 @@
  *
  * - Uses whatever credentials npm already has: in GitHub Actions this is the
  *   OIDC trusted-publishing exchange (no token), locally it is your `npm login`.
+ *   `--provenance` is added only on GitHub Actions (local publishes cannot attest).
  * - A version that already exists on the registry is SKIPPED (not an error),
  *   so re-running a release is safe but is not a new publication.
  * - Set DRY_RUN=true to run `npm publish --dry-run`.
@@ -68,7 +69,10 @@ for (const p of ordered) {
     rows.push(`| ${name} | ${version} | skipped (already published) |`);
     continue;
   }
-  const args = ["publish", "--access", "public", "--provenance"];
+  // Provenance attestations require a CI OIDC provider (GitHub Actions); npm
+  // rejects the flag for local publishes ("not supported for provider: null").
+  // package.json#publishConfig enables provenance for CI; override it locally.
+  const args = ["publish", "--access", "public", `--provenance=${process.env.GITHUB_ACTIONS === "true"}`];
   if (dryRun) args.push("--dry-run");
   console.log(`\n→ npm ${args.join(" ")}  (${name}@${version})`);
   try {
