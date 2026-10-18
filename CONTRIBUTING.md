@@ -72,6 +72,8 @@ package must never import a web framework.
    page (`npm run build:api --workspace apps/docs` rewrites
    `apps/docs/content/docs/api-reference.mdx` from the sources; it also runs on every docs build).
 5. Add a changeset: `npm run changeset` (choose the bump; all packages are versioned together).
+   Releases are cut by merging the generated version PR and publishing a GitHub Release tagged
+   `v<version>` — see `docs/PUBLISHING.md`.
 6. Run `npm run check` locally.
 7. Open a pull request. CI runs lint, build, tests on three Node versions, export verification
    and the pack smoke test.

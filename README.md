@@ -133,6 +133,12 @@ npm run verify:pack    # npm pack + install into a fresh project + smoke app
 npm run check          # lint + build + test + verify:exports
 ```
 
+## Releasing
+
+Versions are managed with Changesets and published to npm from GitHub Actions via **trusted
+publishing (OIDC)** when a GitHub Release tagged `v<version>` is published — no npm tokens.
+See [docs/PUBLISHING.md](docs/PUBLISHING.md).
+
 ## License
 
 [MIT](LICENSE)

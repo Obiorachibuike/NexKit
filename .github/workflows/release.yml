@@ -1,24 +1,22 @@
-name: Release
+name: Version packages
 
-# Publishes @nexkitjs/* to npm using Changesets.
-# - On every push to main, opens/updates a "Version Packages" PR.
-# - When that PR is merged, builds and publishes with npm provenance.
-#
-# Required secrets: NPM_TOKEN (automation token with publish rights to the @nexkitjs scope).
+# Opens/updates a "chore: version packages" pull request from pending changesets.
+# It does NOT publish. Publishing happens in publish.yml when a GitHub Release
+# tagged v<version> is published, using npm trusted publishing (OIDC) — no npm
+# token is stored in this repository.
 
 on:
   push:
     branches: [main]
 
-concurrency: release-${{ github.ref }}
+concurrency: version-${{ github.ref }}
 
 permissions:
   contents: write
   pull-requests: write
-  id-token: write # npm provenance
 
 jobs:
-  release:
+  version:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -28,18 +26,12 @@ jobs:
         with:
           node-version: 22
           cache: npm
-          registry-url: https://registry.npmjs.org
       - run: npm ci
-      - run: npm run build
-      - run: npm test
-      - name: Create release PR or publish
+      - name: Create or update the version PR
         uses: changesets/action@v1
         with:
           version: npm run version-packages
-          publish: npm run release
           commit: "chore: version packages"
           title: "chore: version packages"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-          NPM_CONFIG_PROVENANCE: true

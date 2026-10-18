@@ -52,5 +52,13 @@ packages do and do not provide so you can make informed decisions.
 ## Dependency policy
 
 Runtime packages have no third-party dependencies. Development dependencies are pinned via
-`package-lock.json` and updated regularly. Published packages are built in CI with npm
-provenance enabled.
+`package-lock.json` and updated regularly.
+
+## Release integrity
+
+Packages are published **only** from GitHub Actions (`.github/workflows/publish.yml`) using
+npm **trusted publishing (OIDC)** with provenance attestations. No long-lived npm token exists
+in the repository or its environments, publishing requires approval in the `npm` GitHub
+environment, and each package on npm is configured to require 2FA and disallow token-based
+publishing. You can verify a published tarball with `npm audit signatures` or by inspecting the
+provenance badge on npmjs.com. See `docs/PUBLISHING.md`.

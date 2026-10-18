@@ -36,33 +36,45 @@ maintainers, but it also explains the compatibility guarantees users can expect.
 
 ## Release flow
 
-1. Contributors add a changeset with their PR:
+Publishing uses **npm trusted publishing (OpenID Connect)** from GitHub Actions. No npm token
+is stored in the repository.
 
-   ```bash
-   npm run changeset
-   ```
+```
+changeset in PR → merge → "chore: version packages" PR → merge → GitHub Release v<version> → publish.yml → npm
+```
 
-2. On merge to `main`, the **Release** workflow (`changesets/action`) opens or updates a
-   *"chore: version packages"* pull request that bumps versions and writes `CHANGELOG.md`
-   entries.
+1. Contributors add a changeset with their PR (`npm run changeset`).
+2. On merge to `main`, the **Version packages** workflow (`release.yml`) opens or updates a
+   *chore: version packages* PR that bumps versions and writes `CHANGELOG.md`. It never publishes.
+3. Merge that PR, then publish a **GitHub Release tagged exactly `v<version>`** on the merge
+   commit (`gh release create v0.1.1 --target main --generate-notes`).
+4. The **Publish to npm** workflow (`publish.yml`) checks that every `package.json` matches the
+   tag, builds and tests, then waits in the `npm` GitHub environment for a required reviewer
+   to approve. After approval it publishes all packages in dependency order with provenance.
 
-3. Merging that PR triggers `npm run release` → `npm run build && changeset publish`. Packages
-   are published with `--access public` and **npm provenance** (`id-token: write`), and git
-   tags are pushed.
+Packages whose version already exists on npm are **skipped** and reported as a no-op, so
+re-running a release is safe — but validating OIDC requires a new version.
 
-Required secret: `NPM_TOKEN` (automation token for the `@nexkitjs` scope).
+### One-time setup
 
-## Manual release (fallback)
+- The first version of each package must be published once from a maintainer machine
+  (`node scripts/publish-packages.mjs`): npm only allows trusted publishers on existing packages.
+- Create the GitHub environment `npm` with a required reviewer and a `v*` tag deployment rule
+  (`scripts/setup-npm-environment.sh`).
+- On npmjs.com, for each package, add a trusted publisher: owner `Obiorachibuike`, repository
+  `NexKit`, workflow `publish.yml`, environment `npm`, allowed action *Direct npm publish*.
+
+Full instructions, a dry-run mode and recovery steps live in
+[`docs/PUBLISHING.md`](https://github.com/Obiorachibuike/NexKit/blob/main/docs/PUBLISHING.md).
+
+## Manual release (emergency fallback)
 
 ```bash
 npm ci
 npm run check            # lint + build + tests + export verification
-npm run verify:pack      # pack → install tarballs into a fresh project → run smoke app + CLI
-npm run version-packages
-git commit -am "chore: version packages"
-npm login
-npm run release
-git push --follow-tags
+npm run verify:pack      # pack → install tarballs into a fresh project → smoke app + CLI
+npm login                # maintainer account with 2FA
+node scripts/publish-packages.mjs   # dependency order, skips versions already on npm
 ```
 
 ## What a tarball contains

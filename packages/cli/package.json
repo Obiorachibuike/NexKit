@@ -31,7 +31,7 @@
     "./package.json": "./package.json"
   },
   "bin": {
-    "nexkit": "./dist/bin.js"
+    "nexkit": "dist/bin.js"
   },
   "files": [
     "dist",

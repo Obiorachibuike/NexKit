@@ -22,3 +22,4 @@ apps/docs/public/search-index.json
 .vscode/
 .idea/
 .tmp/
+publish-summary.md
