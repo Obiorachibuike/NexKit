@@ -1,0 +1,98 @@
+# FAQ
+
+## General
+
+### Is NexKit a framework?
+
+No. It is a set of libraries that plug into Express or Fastify (or run standalone). It has
+no router, no dependency injection and no opinion about your project structure beyond the
+optional files `nexkit init` generates.
+
+### Do I need all the packages?
+
+No. Each package is independently installable. `@nexkitjs/config` alone depends only on
+`core` and `errors`. The adapters pull in the modules they wire together.
+
+### Why `@nexkitjs` and not `@nexkit`?
+
+Both `nexkit` and `@nexkit` were taken on npm by unrelated projects. See
+[Publishing](/docs/publishing/#package-names).
+
+### Is it production-ready?
+
+The code is tested (unit, integration over real HTTP, packed-tarball smoke tests, Node
+20/22/24) and the defaults are conservative. The version is `0.x`, which means the API may
+still change in minor releases — read the changelog when upgrading. See the
+[Roadmap](/docs/roadmap/) for a candid list of limitations.
+
+## Compatibility
+
+### Does it support CommonJS?
+
+The packages are ESM only. Node ≥ 20.19 and ≥ 22.12 can `require()` ESM modules directly;
+on older versions use `await import("@nexkitjs/config")`.
+
+### Which Express and Fastify versions?
+
+Express `>= 4.18 < 6` and Fastify `>= 4 < 6`. Express 5 and Fastify 5 are what the examples
+and tests use. On Express 4 wrap async handlers with `asyncHandler`.
+
+### Does it work with Bun or Deno?
+
+The core packages use only standard Node APIs (`AsyncLocalStorage`, `crypto`, streams), which
+both runtimes implement. It is not part of the CI matrix, so treat it as unverified.
+
+### Can I use it with NestJS, Koa, Hono…?
+
+The core modules, yes. There is no adapter for them yet; see
+[Migration → other frameworks](/docs/migration/#using-nexkit-with-other-frameworks) for what
+an adapter needs to do.
+
+## Features
+
+### Can I keep using pino / winston?
+
+Yes. Anything matching the `Logger` interface (level methods + `child`) can be passed to the
+adapters. You lose NexKit's redaction for request logs but keep its request context.
+
+### Can I keep Helmet?
+
+Yes — skip `secureHeaders()` and pass `secureHeaders: false` to the Fastify plugin so headers
+are not set twice.
+
+### Does `validateEnv` load `.env` files?
+
+No. Use `node --env-file=.env` (Node ≥ 20.6) or `dotenv` before importing your config module.
+`validateEnv` validates whatever is in `process.env` (or a `source` you pass).
+
+### Why does the error response hide my message for 500s?
+
+Because internal messages routinely contain hostnames, SQL fragments or credentials. Set
+`publicMessage` or `expose: true` on the error when the message is safe to show.
+
+### Does NexKit do authentication, CORS or CSRF?
+
+No. Use dedicated libraries; NexKit focuses on configuration, errors, logging, request
+utilities, security headers/limits, health, responses and rate-limit integration.
+
+### Is the memory rate-limit store safe in production?
+
+Only for a single process. Behind a load balancer each instance counts separately. Use
+Redis via `createRedisStore` or `rate-limiter-flexible` via `adaptRateLimiterFlexible`.
+
+### How do I add a custom error code?
+
+Pass any string as `code` to `AppError` (or subclass it). `ErrorCodes` lists the built-in
+codes; custom codes default to status 500 unless you also pass `status`.
+
+## Project
+
+### How do I report a security issue?
+
+Follow [SECURITY.md](https://github.com/Obiorachibuike/NexKit/blob/main/SECURITY.md) —
+private disclosure first.
+
+### How can I contribute?
+
+See [Contributing](/docs/contributing/). Good first contributions: adapters for other
+frameworks, additional health checks, docs improvements.

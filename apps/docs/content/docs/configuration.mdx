@@ -1,0 +1,206 @@
+# Configuration
+
+`@nexkitjs/config` validates environment variables **once, at startup**, and gives you a
+typed, frozen object. If anything is missing or malformed the process fails immediately with
+a message that lists every problem — by variable name, never by value.
+
+```bash
+npm install @nexkitjs/config
+```
+
+## Basic usage
+
+```ts title="src/config/env.ts"
+import { validateEnv } from "@nexkitjs/config";
+
+export const env = validateEnv({
+  PORT: { type: "number", default: 3000 },
+  DATABASE_URL: { type: "url" },
+});
+
+env.PORT;         // number
+env.DATABASE_URL; // string
+```
+
+Import `env` wherever you need configuration. Because validation runs when the module is
+first imported, a broken deployment fails before it binds a port.
+
+## Field types
+
+| `type`      | Result type           | Options                                                   |
+| ----------- | --------------------- | --------------------------------------------------------- |
+| `"string"`  | `string`              | `minLength`, `maxLength`, `pattern: RegExp`                |
+| `"number"`  | `number`              | `min`, `max`, `integer`                                    |
+| `"port"`    | `number`              | integer 0–65535                                            |
+| `"boolean"` | `boolean`             | accepts `true/false`, `1/0`, `yes/no`, `on/off`             |
+| `"url"`     | `string`              | `protocols: ["postgres", "postgresql"]` allow-list          |
+| `"enum"`    | union of `values`     | `values: readonly string[]`                                |
+| `"list"`    | `string[]`            | `separator` (default `,`), `minItems`                      |
+| `"json"`    | `T` (default unknown) | `validate: (v) => v is T` type guard                        |
+| `"custom"`  | `T`                   | `parse: (raw, key) => T` — throw to reject                  |
+
+Every field also accepts:
+
+- `default` — used when the variable is unset or empty. Makes the property required in the
+  result type.
+- `optional: true` — the property becomes `T | undefined`.
+- `secret: true` — masks the value in `maskEnv()` and renders `<secret>` in generated
+  `.env.example` files. Keys containing `PASSWORD`, `SECRET`, `TOKEN`, `KEY`, `PRIVATE`,
+  `CREDENTIAL`, `DATABASE_URL`, etc. are treated as secret automatically
+  (`isSecretField`).
+- `description` and `example` — used by the CLI and `.env.example` generation.
+
+## A realistic schema
+
+```ts
+import { defineEnvSchema, validateEnv, type InferEnv } from "@nexkitjs/config";
+
+export const envSchema = defineEnvSchema({
+  NODE_ENV: { type: "enum", values: ["development", "test", "production"], default: "development" },
+  PORT: { type: "port", default: 3000 },
+  LOG_LEVEL: { type: "enum", values: ["debug", "info", "warn", "error"], default: "info" },
+  DATABASE_URL: { type: "url", protocols: ["postgres", "postgresql"], description: "Primary database" },
+  REDIS_URL: { type: "url", optional: true },
+  SESSION_SECRET: { type: "string", minLength: 32, secret: true },
+  CORS_ORIGINS: { type: "list", default: [] },
+  FEATURE_FLAGS: {
+    type: "json",
+    default: {},
+    validate: (v): v is Record<string, boolean> => typeof v === "object" && v !== null,
+  },
+  SHUTDOWN_TIMEOUT: {
+    type: "custom",
+    default: 10_000,
+    parse: (raw) => {
+      const ms = Number(raw);
+      if (!Number.isFinite(ms) || ms < 0) throw new Error("must be a non-negative number of milliseconds");
+      return ms;
+    },
+  },
+});
+
+export type Env = InferEnv<typeof envSchema>;
+export const env: Env = validateEnv(envSchema);
+```
+
+`defineEnvSchema` is an identity function that preserves literal types so the schema can be
+shared with tests and tooling. `InferEnv` derives the result type:
+
+```ts
+type Env = {
+  readonly NODE_ENV: "development" | "test" | "production";
+  readonly PORT: number;
+  readonly REDIS_URL: string | undefined;
+  readonly CORS_ORIGINS: string[];
+  // …
+};
+```
+
+## Errors
+
+Validation collects **all** issues before failing:
+
+```
+EnvValidationError: Invalid environment configuration (3 issues):
+  - DATABASE_URL: required but not set (expected a URL)
+  - SESSION_SECRET: must be at least 32 characters
+  - PORT: expected a port number between 0 and 65535
+```
+
+`EnvValidationError` extends `AppError` from `@nexkitjs/errors` with `code: "CONFIG_INVALID"`
+and `status: 500`. Its `issues` array contains `{ key, message, kind: "missing" | "invalid" }`.
+The public message is the generic "Server configuration error", so even if the error escaped
+into an HTTP response it would not describe your environment.
+
+<Callout type="tip" title="Values are never echoed">
+  Messages say what was expected, not what was received. A malformed `DATABASE_URL` yields
+  "expected a URL", not the connection string with the password in it.
+</Callout>
+
+### Non-throwing validation
+
+```ts
+import { safeValidateEnv } from "@nexkitjs/config";
+
+const result = safeValidateEnv(envSchema);
+if (!result.success) {
+  for (const issue of result.error.issues) console.error(issue.key, issue.message);
+  process.exit(1);
+}
+result.data.PORT;
+```
+
+## Options
+
+```ts
+validateEnv(schema, {
+  source: process.env,        // any Record<string, string | undefined>
+  prefix: "APP_",             // reads APP_PORT for the PORT field
+  emptyIsUndefined: true,     // treat "" as unset (default)
+  freeze: true,               // Object.freeze the result (default)
+});
+```
+
+`source` makes the function usable with files, secret managers or test fixtures.
+
+## Safe startup banner
+
+```ts
+import { maskEnv } from "@nexkitjs/config";
+
+logger.info({ env: maskEnv(env, envSchema) }, "configuration loaded");
+// { NODE_ENV: "production", PORT: 3000, DATABASE_URL: "[REDACTED]", SESSION_SECRET: "[REDACTED]" }
+```
+
+## Generating `.env.example`
+
+```ts
+import { generateEnvExample } from "@nexkitjs/config";
+writeFileSync(".env.example", generateEnvExample(envSchema));
+```
+
+```bash
+# or via the CLI, which also keeps the file in sync with your schema
+npx nexkit generate config --example
+```
+
+Output includes type, allowed values and defaults as comments, so the file doubles as
+documentation. The CLI can also read an existing `.env.example` and infer a schema from it
+(`nexkit generate config --from .env.example`).
+
+## Patterns
+
+### Per-environment overrides
+
+Keep one schema. Use defaults for development and require values in production with a
+custom field:
+
+```ts
+SESSION_SECRET: {
+  type: "custom",
+  parse: (raw) => {
+    if (process.env.NODE_ENV === "production" && raw.length < 32) throw new Error("too short for production");
+    return raw;
+  },
+  default: "dev-only-secret-do-not-use-in-production",
+  secret: true,
+},
+```
+
+### Testing with fixtures
+
+```ts
+import { withEnv } from "@nexkitjs/testing";
+
+await withEnv({ DATABASE_URL: "postgres://localhost/test" }, async () => {
+  const { env } = await import("./env.js?fresh");
+  expect(env.DATABASE_URL).toContain("test");
+});
+```
+
+## Limitations
+
+- Schemas are static objects, not a general validation language. For deeply nested config
+  objects, use the `json` field with a Standard Schema `validate` guard, or your own loader.
+- `validateEnv` reads strings only; it does not load `.env` files. Use Node's built-in
+  `node --env-file=.env` (Node ≥ 20.6) or `dotenv` before importing your config module.

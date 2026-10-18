@@ -1,0 +1,95 @@
+# API responses
+
+`@nexkitjs/response` standardizes response bodies so clients can rely on one shape across
+all endpoints, including errors produced by the adapters.
+
+```bash
+npm install @nexkitjs/response
+```
+
+## Envelopes
+
+```ts
+import { ok, created, paginated, cursorPaginated, errorBody } from "@nexkitjs/response";
+
+ok({ id: 1, name: "Ada" });
+// { success: true, data: { id: 1, name: "Ada" } }
+
+ok(user, { requestId: req.id });
+// { success: true, data: {…}, requestId: "7b1d0c2e-…" }
+
+ok(items, { total: 42 });                 // custom meta
+// { success: true, data: [...], meta: { total: 42 } }
+
+created(user);                            // alias of ok — pair with status 201
+
+errorBody(new NotFoundError("User not found"), { requestId: req.id });
+// { success: false, error: { code: "NOT_FOUND", message: "User not found", status: 404 }, requestId: "7b1d0c2e-…" }
+```
+
+`errorBody` accepts anything and runs it through `normalizeError`, so unknown exceptions
+produce a safe generic 500 body.
+
+### Types
+
+```ts
+import type { ApiResponse, ApiSuccess, ApiFailure, PaginatedResponse } from "@nexkitjs/response";
+
+async function getUser(id: string): Promise<ApiResponse<User>> { … }
+
+const res = await api.get<ApiResponse<User>>("/users/1");
+if (isApiSuccess(res)) res.data.name;   // narrowed
+else res.error.code;
+```
+
+## Offset pagination
+
+```ts
+import { parsePagination, paginated } from "@nexkitjs/response";
+
+app.get("/users", async (req, res) => {
+  const { page, pageSize, offset, limit } = parsePagination(req.query, {
+    defaultPageSize: 20,
+    maxPageSize: 100,   // exceeding it → 422 (or set clamp: true)
+  });
+  const [rows, total] = await Promise.all([users.list({ offset, limit }), users.count()]);
+  res.json(paginated(rows, { page, pageSize, total }));
+});
+```
+
+```json
+{
+  "success": true,
+  "data": [ … ],
+  "meta": { "page": 2, "pageSize": 20, "total": 95, "totalPages": 5, "hasNext": true, "hasPrev": true }
+}
+```
+
+`parsePagination` reads `page` and `pageSize` (also accepts `limit`), rejects
+non-integers and out-of-range values with a `ValidationError`, and returns a zero-based
+`offset` for SQL. Parameter names are configurable (`pageParam`, `pageSizeParam`).
+
+## Cursor pagination
+
+```ts
+const { rows, nextCursor } = await events.after(cursor, { limit: 50 });
+res.json(cursorPaginated(rows, { pageSize: 50, nextCursor }));
+// meta: { pageSize: 50, nextCursor: "eyJpZCI6…", hasMore: true }   (hasMore = nextCursor !== null)
+```
+
+## Validation issue formatting
+
+```ts
+import { formatValidationIssues } from "@nexkitjs/response";
+
+formatValidationIssues(zodError.issues);
+// [{ path: "address.zip", message: "Expected string, received number" }]
+```
+
+Accepts Standard Schema issues (path segments as strings, numbers or `{ key }` objects) and
+produces dotted/bracketed paths without values.
+
+## Streaming and non-JSON
+
+The helpers only build plain objects; they do not touch the response. Use them with
+`res.json`, `reply.send`, `Response.json()` in edge runtimes, or anywhere else.

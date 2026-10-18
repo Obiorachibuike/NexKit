@@ -1,0 +1,65 @@
+{
+  "name": "@nexkitjs/express",
+  "version": "0.1.0",
+  "description": "Express middleware for NexKit: request IDs, timing, structured logging, secure headers, error handling, health routes, validation, and rate limiting.",
+  "keywords": [
+    "nexkit",
+    "express",
+    "middleware"
+  ],
+  "license": "MIT",
+  "author": "NexKit contributors",
+  "homepage": "https://github.com/Obiorachibuike/NexKit/tree/main/packages/express#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Obiorachibuike/NexKit.git",
+    "directory": "packages/express"
+  },
+  "bugs": {
+    "url": "https://github.com/Obiorachibuike/NexKit/issues"
+  },
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "sideEffects": false,
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "scripts": {
+    "build": "tsc -b",
+    "clean": "node ../../scripts/clean.mjs .",
+    "test": "vitest run --project express"
+  },
+  "dependencies": {
+    "@nexkitjs/core": "0.1.0",
+    "@nexkitjs/errors": "0.1.0",
+    "@nexkitjs/health": "0.1.0",
+    "@nexkitjs/logger": "0.1.0",
+    "@nexkitjs/ratelimit": "0.1.0",
+    "@nexkitjs/response": "0.1.0"
+  },
+  "peerDependencies": {
+    "express": ">=4.18.0 <6"
+  },
+  "devDependencies": {
+    "express": "^5.1.0",
+    "@types/express": "^5.0.0"
+  }
+}

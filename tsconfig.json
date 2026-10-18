@@ -1,0 +1,33 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "composite": false,
+    "incremental": false,
+    "declaration": false,
+    "declarationMap": false,
+    "sourceMap": false,
+    "noEmit": true,
+    "allowImportingTsExtensions": true,
+    "baseUrl": ".",
+    "paths": {
+      "@nexkitjs/core": ["packages/core/src/index.ts"],
+      "@nexkitjs/config": ["packages/config/src/index.ts"],
+      "@nexkitjs/errors": ["packages/errors/src/index.ts"],
+      "@nexkitjs/logger": ["packages/logger/src/index.ts"],
+      "@nexkitjs/health": ["packages/health/src/index.ts"],
+      "@nexkitjs/response": ["packages/response/src/index.ts"],
+      "@nexkitjs/ratelimit": ["packages/ratelimit/src/index.ts"],
+      "@nexkitjs/express": ["packages/express/src/index.ts"],
+      "@nexkitjs/fastify": ["packages/fastify/src/index.ts"],
+      "@nexkitjs/testing": ["packages/testing/src/index.ts"],
+      "@nexkitjs/cli": ["packages/cli/src/index.ts"]
+    }
+  },
+  "include": [
+    "packages/*/src/**/*.ts",
+    "packages/*/test/**/*.ts",
+    "scripts/**/*.ts",
+    "vitest.config.ts"
+  ],
+  "exclude": ["**/node_modules", "**/dist", "apps", "examples"]
+}

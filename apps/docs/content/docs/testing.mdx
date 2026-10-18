@@ -1,0 +1,149 @@
+# Testing
+
+`@nexkitjs/testing` contains small helpers for testing applications built with NexKit. It is
+framework-agnostic — use it with Vitest, Jest, `node:test` or anything else.
+
+```bash
+npm install -D @nexkitjs/testing
+```
+
+## Capturing logs
+
+```ts
+import { createTestLogger } from "@nexkitjs/testing";
+
+const logs = createTestLogger();              // level: trace, fixed timestamp, memory transport
+const app = buildApp({ logger: logs.logger });
+
+await request(app).get("/users/1");
+
+logs.entries;                                  // LogEntry[]
+logs.at("error");                              // entries at a level
+logs.find("request completed")?.status;        // first entry whose msg matches
+logs.contains("s3cret");                       // true if the string appears anywhere → assert it is false
+logs.clear();
+```
+
+`contains()` is the easiest way to prove a secret never reached the logs:
+
+```ts
+it("does not leak the database password", async () => {
+  await request(app).get("/users/1/crash");     // throws an error containing the connection string
+  expect(logs.contains("s3cret")).toBe(false);
+});
+```
+
+## Environment fixtures
+
+```ts
+import { withEnv } from "@nexkitjs/testing";
+
+await withEnv({ PORT: "4000", DATABASE_URL: undefined }, async () => {
+  // process.env is patched inside; restored afterwards even if the callback throws
+  const result = safeValidateEnv(schema);
+  expect(result.success).toBe(false);
+});
+```
+
+## Error assertions
+
+```ts
+import { expectAppError, rejected } from "@nexkitjs/testing";
+
+const err = expectAppError(await rejected(() => service.remove("nope")), {
+  code: "NOT_FOUND",
+  status: 404,
+  message: /not found/i,   // string or RegExp, matched against the internal message
+  publicMessage: "User not found",
+  instanceOf: NotFoundError,
+});
+err.details;
+```
+
+`expectAppError` throws an `AppErrorAssertionError` with a readable diff when the value is
+not an `AppError` or a field does not match. `rejected(fn)` returns the rejection reason or
+throws if the promise resolved.
+
+## Request context
+
+```ts
+import { runInTestContext } from "@nexkitjs/testing";
+import { getRequestId } from "@nexkitjs/core";
+
+runInTestContext(() => {
+  expect(getRequestId()).toBe("test-req");
+  logger.info("inside");                       // entry has requestId: "test-req"
+}, { requestId: "test-req", correlationId: "corr-1" });
+```
+
+## Deterministic time and rate limits
+
+```ts
+import { createManualClock, createTestRateLimiter } from "@nexkitjs/testing";
+
+const clock = createManualClock();            // starts at a fixed epoch
+clock.now(); clock.advance(1000); clock.set(ts);
+
+const { limiter, clock: c, dispose } = createTestRateLimiter({ limit: 3, windowMs: 60_000 });
+// MemoryRateLimitStore + fixed window driven by the manual clock
+```
+
+## Health check stubs
+
+```ts
+import { healthCheckStub } from "@nexkitjs/testing";
+
+registry.register("db", healthCheckStub({ status: "degraded" }));
+registry.register("slow", healthCheckStub({ delayMs: 500 }), { timeoutMs: 50 });
+registry.register("boom", healthCheckStub({ throws: true }));
+```
+
+## Integration testing the adapters
+
+<Tabs items={["Express", "Fastify"]} group="framework">
+<Tab>
+
+```ts
+import { afterAll, beforeAll, expect, it } from "vitest";
+import type { Server } from "node:http";
+
+let server: Server; let base: string;
+beforeAll(async () => {
+  server = app.listen(0);
+  const { port } = server.address() as { port: number };
+  base = `http://127.0.0.1:${port}`;
+});
+afterAll(() => new Promise((r) => server.close(r)));
+
+it("propagates a valid incoming request id", async () => {
+  const res = await fetch(`${base}/users/1`, { headers: { "x-request-id": "abc-123" } });
+  expect(res.headers.get("x-request-id")).toBe("abc-123");
+});
+
+it("replaces an invalid incoming request id", async () => {
+  const res = await fetch(`${base}/users/1`, { headers: { "x-request-id": "bad id\n" } });
+  expect(res.headers.get("x-request-id")).not.toBe("bad id\n");
+});
+```
+
+</Tab>
+<Tab>
+
+```ts
+it("returns the standard validation envelope", async () => {
+  const res = await app.inject({ method: "POST", url: "/users", payload: { name: "x" } });
+  expect(res.statusCode).toBe(422);
+  expect(res.json()).toMatchObject({ success: false, error: { code: "VALIDATION_ERROR" } });
+});
+```
+
+</Tab>
+</Tabs>
+
+## What NexKit tests itself
+
+The repository's own suite covers configuration (valid/invalid/secret handling), error
+serialization, redaction, request-id propagation, health timeouts, pagination, adapter
+behaviour (integration tests over real HTTP for Express and `inject` for Fastify), the CLI
+generators (including type-checking of generated output), package export maps and a packed
+tarball smoke test — on Node 20, 22 and 24.

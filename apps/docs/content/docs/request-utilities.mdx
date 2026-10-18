@@ -1,0 +1,117 @@
+# Request utilities
+
+Request utilities give every request an **id**, propagate a **correlation id** across
+services, measure **timing** and emit **one structured log line per request**. They live in
+`@nexkitjs/core` (context and id helpers) and are wired by the Express and Fastify adapters.
+
+## What the adapters do on every request
+
+1. Read `X-Request-Id` from the incoming request. If it is present *and valid* (≤ 128 chars,
+   `[A-Za-z0-9._:-]`) it is reused; otherwise a new UUID v4 is generated (`crypto.randomUUID`).
+2. Read `X-Correlation-Id` (optional, same validation). Falls back to the request id.
+3. Set both headers on the response.
+4. Run the rest of the pipeline inside an `AsyncLocalStorage` context containing
+   `{ requestId, correlationId, startedAt, method, path }`.
+5. When the response finishes, log `request completed` with method, path, status,
+   `durationMs`, ids and any configured metadata.
+
+```json
+{"level":"info","msg":"request completed","requestId":"7b1d0c2e-5f7a-4c3b-9e2d-1a2b3c4d5e6f","correlationId":"order-77","method":"POST","path":"/orders","status":201,"durationMs":12.37,"ip":"203.0.113.9","userAgent":"curl/8.4"}
+```
+
+## Configuration
+
+Options are identical for `requestContext()` (Express) and `requestContext` in the Fastify
+plugin:
+
+| Option                   | Default            | Description                                                  |
+| ------------------------ | ------------------ | ------------------------------------------------------------ |
+| `logger`                 | —                  | Logger for per-request entries. Omit to disable request logs. |
+| `requestIdHeader`        | `"x-request-id"`   | Header to read/write                                          |
+| `correlationIdHeader`    | `"x-correlation-id"` | Header to read/write                                        |
+| `trustIncomingRequestId` | `true`             | Reuse valid incoming ids; set `false` to always generate       |
+| `setResponseHeaders`     | `true`             | Echo ids on the response                                      |
+| `ignore`                 | `[]`               | Paths (or predicate) that skip request logging — e.g. health  |
+| `metadata`               | ip, userAgent, contentLength | `(req, res) => fields` to add to the log line      |
+| `logHeaders`             | `false`            | Include (redacted) request headers                            |
+| `logQuery`               | `false`            | Include (redacted) query string                               |
+| `level`                  | status-based       | `(req, res) => "info" \| "warn" \| …`                          |
+| `redact`                 | core defaults      | Extra redaction for metadata/headers/query                    |
+| `message`                | `"request completed"` |                                                            |
+
+```ts
+app.use(
+  requestContext({
+    logger,
+    ignore: ["/health/live", "/health/ready", "/metrics"],
+    metadata: (req) => ({ tenant: req.headers["x-tenant-id"], route: req.route?.path }),
+    level: (req, res) => (res.statusCode >= 500 ? "error" : req.method === "GET" ? "debug" : "info"),
+  }),
+);
+```
+
+## Reading the context anywhere
+
+```ts
+import { getRequestId, getCorrelationId, getRequestContext, setRequestContextValue } from "@nexkitjs/core";
+
+async function chargeCard(order: Order) {
+  await gateway.charge(order, { idempotencyKey: getRequestId() });
+  setRequestContextValue("orderId", order.id); // appears in the final request log
+}
+```
+
+Because the context is stored in `AsyncLocalStorage`, it survives `await`, timers and
+promise chains without threading a parameter through your code. The logger reads it
+automatically.
+
+## Propagating to downstream services
+
+```ts
+const res = await fetch(`${env.INVENTORY_URL}/reserve`, {
+  headers: {
+    "x-request-id": getRequestId() ?? "",
+    "x-correlation-id": getCorrelationId() ?? "",
+  },
+});
+```
+
+The downstream NexKit service accepts the ids (validation permitting) and its logs join the
+same trace.
+
+## Outside HTTP
+
+Use the primitives directly in queues, cron jobs and tests:
+
+```ts
+import { runWithRequestContext, createRequestContext } from "@nexkitjs/core";
+
+queue.process(async (job) => {
+  await runWithRequestContext(createRequestContext({ correlationId: job.data.correlationId }), () => handle(job));
+});
+```
+
+`createRequestContext` generates a request id when none is given.
+
+## Security notes
+
+- Incoming ids are validated to prevent log injection and oversized headers. Invalid ids are
+  silently replaced; set `trustIncomingRequestId: false` when clients are untrusted.
+- Headers and query strings are **not** logged unless enabled, and are redacted when they are.
+- Client IP comes from the framework (`req.ip`), which only reflects proxies when
+  `trust proxy` / `trustProxy` is configured.
+
+## Timing helpers
+
+```ts
+import { startTimer, withTimeout } from "@nexkitjs/core";
+
+const elapsed = startTimer();
+await work();
+logger.debug({ durationMs: elapsed() }, "work done");
+
+const data = await withTimeout((signal) => fetch(url, { signal }), 2000, { message: "inventory timeout" });
+```
+
+`withTimeout` rejects with a `TimeoutError` (mapped to 504 by `normalizeError`) and aborts
+the signal so the underlying operation can stop.

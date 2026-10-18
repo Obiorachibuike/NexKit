@@ -1,0 +1,76 @@
+# Roadmap
+
+This page is deliberately candid: what is implemented and tested today, what is known not
+to be covered, and what is planned. It is updated with each release.
+
+## Implemented (0.1)
+
+| Area                | Status | Notes                                                                     |
+| ------------------- | ------ | ------------------------------------------------------------------------- |
+| Config validation   | ✅     | 9 field types, defaults, secrets, aggregated value-free errors, `.env.example` generation |
+| Errors              | ✅     | `AppError`, 17 HTTP classes, code/status maps, `normalizeError` for body-parser/Fastify/timeout errors, serialization |
+| Logging             | ✅     | NDJSON, levels, children, redaction, error chains, context correlation, 5 transports |
+| Request utilities   | ✅     | Request/correlation ids with validation, AsyncLocalStorage context, timing, per-request log |
+| Security helpers    | ✅     | Header preset, size limits, Standard Schema validation, redaction, safe error exposure |
+| Health checks       | ✅     | Registry, timeouts, criticality, liveness/readiness split, built-in heap & event-loop checks |
+| API responses       | ✅     | Envelopes, offset & cursor pagination, pagination parsing, validation formatting |
+| Rate limiting       | ✅     | Contract, fixed window, memory (single-process) & Redis stores, `rate-limiter-flexible` adapter, headers |
+| Express adapter     | ✅     | 9 middleware + `getValidated`; Express 4 & 5; integration-tested over HTTP                 |
+| Fastify adapter     | ✅     | Plugin + route hooks; Fastify 4 & 5; integration-tested with `inject`      |
+| CLI                 | ✅     | `init`, `doctor`, `generate config`, `generate middleware`; templates type-checked; examples generated from templates |
+| Testing utilities   | ✅     | Log capture, env fixtures, error assertions, context, manual clock, limiter, health stubs |
+| Packaging           | ✅     | ESM + `.d.ts`, `exports` maps, zero runtime deps, provenance, export verification, tarball smoke test |
+| CI                  | ✅     | Node 20/22/24 matrix, lint, build, tests, export + pack verification, docs build |
+
+## Known limitations
+
+- **ESM only.** CommonJS consumers need Node ≥ 20.19/22.12 (`require(esm)`) or dynamic
+  `import()`. A dual build is not planned; the ecosystem has moved.
+- **No distributed rate limiter of its own.** By design — bring Redis or an established
+  library. The memory store is single-process and says so.
+- **Key-based redaction.** Secrets hidden under innocent keys or inside free-text messages
+  are not detected. `valuePatterns` helps for known token formats.
+- **Fixed-window algorithm only** in the built-in limiter. Sliding windows, token buckets
+  and penalties are available through `rate-limiter-flexible`.
+- **Logger has no rotation, batching or network shipping.** It writes to a stream.
+- **`validateRequest` on Fastify** is a `preHandler` and does not feed Fastify's response
+  serialization or OpenAPI generators. Fastify JSON Schema remains the way to do that.
+- **Secure headers target JSON APIs.** Apps serving HTML need explicit CSP directives.
+- **No adapters yet** for Koa, Hono, NestJS or raw `http`. The core modules work there; the
+  wiring is manual (see [Migration](/docs/migration/#using-nexkit-with-other-frameworks)).
+- **Bun/Deno untested.** Likely to work; not in the CI matrix.
+- **`0.x` API.** Minor versions may contain breaking changes until 1.0; they are always
+  listed in the changelog.
+
+## Planned
+
+### 0.2
+
+- `@nexkitjs/hono` adapter (Hono is framework-agnostic enough to double as a template for
+  edge runtimes).
+- `createRedisStore` sliding-window option backed by a Lua script.
+- OpenTelemetry bridge: expose `traceId`/`spanId` from the active span in the request
+  context and log entries, without taking a dependency on the SDK.
+- `nexkit doctor --fix` for the simple cases (`.gitignore`, `.env.example`).
+
+### 0.3
+
+- Request-scoped child logger helper on `req` for Express (`req.log`) mirroring Fastify.
+- Health check presets for common clients (Postgres, Redis, HTTP upstream) implemented as
+  tiny factories that accept the client instance.
+- Metrics hooks (`onRequestComplete`) designed to feed `prom-client` without a dependency.
+
+### 1.0
+
+- API freeze after real-world feedback; SemVer guarantees from then on.
+- Dedicated guides for NestJS (via the Express/Fastify platform adapters) and serverless
+  deployments.
+
+## Non-goals
+
+- Replacing Express/Fastify, or shipping a router, ORM or DI container.
+- Custom cryptography, authentication or session management.
+- A plugin marketplace or configuration DSL beyond typed TypeScript objects.
+
+Suggestions and PRs for the planned items are welcome — see
+[Contributing](/docs/contributing/).

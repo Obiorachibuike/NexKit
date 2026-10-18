@@ -1,0 +1,140 @@
+# Fastify
+
+`@nexkitjs/fastify` is a plugin for Fastify **4.x and 5.x** exposing the same features as the
+Express middleware with Fastify idioms: hooks, `genReqId`, `setErrorHandler`,
+`setNotFoundHandler` and route-level `preHandler`s.
+
+```bash
+npm install @nexkitjs/fastify @nexkitjs/logger @nexkitjs/health @nexkitjs/ratelimit fastify
+```
+
+## Complete example
+
+```ts title="src/app.ts"
+import Fastify from "fastify";
+import { z } from "zod";
+import { createLogger } from "@nexkitjs/logger";
+import { createHealthRegistry } from "@nexkitjs/health";
+import { createFixedWindowLimiter, createRedisStore } from "@nexkitjs/ratelimit";
+import { NotFoundError } from "@nexkitjs/errors";
+import { ok, created, paginated, parsePagination } from "@nexkitjs/response";
+import { nexkit, requestIdGenerator, validateRequest, getValidated } from "@nexkitjs/fastify";
+import { env } from "./config/env.js";
+
+export async function buildApp() {
+  const logger = createLogger({ name: "api", level: env.LOG_LEVEL });
+  const health = createHealthRegistry();
+  health.register("postgres", (signal) => db.ping({ signal }), { timeoutMs: 2000 });
+  const limiter = createFixedWindowLimiter({ store: createRedisStore(redis), limit: 100, windowMs: 60_000 });
+
+  const app = Fastify({
+    genReqId: requestIdGenerator(),  // NexKit ids (validates incoming X-Request-Id)
+    bodyLimit: 1024 * 1024,
+    trustProxy: true,
+    logger: false,                   // NexKit logs requests; enable Fastify's logger if you prefer
+  });
+
+  await app.register(nexkit, {
+    logger,
+    health,
+    rateLimit: { limiter, keyGenerator: (req) => req.ip },
+    secureHeaders: { strictTransportSecurity: env.NODE_ENV === "production" ? {} : false },
+    requestContext: { ignore: ["/health/live", "/health/ready"] },
+  });
+
+  const CreateUser = z.object({ name: z.string().min(2), email: z.string().email() });
+  const UserParams = z.object({ id: z.coerce.number().int().positive() });
+
+  app.get("/users", async (req) => {
+    const { page, pageSize, offset, limit } = parsePagination(req.query as Record<string, unknown>, { maxPageSize: 50 });
+    const [rows, total] = await Promise.all([users.list({ offset, limit }), users.count()]);
+    return paginated(rows, { page, pageSize, total }, { requestId: req.id });
+  });
+
+  app.get("/users/:id", { preHandler: validateRequest({ params: UserParams }) }, async (req) => {
+    const { params } = getValidated<unknown, unknown, z.infer<typeof UserParams>>(req);
+    const user = await users.find(params.id);
+    if (!user) throw new NotFoundError(`User ${params.id} not found`);
+    return ok(user, { requestId: req.id });
+  });
+
+  app.post("/users", { preHandler: validateRequest({ body: CreateUser }) }, async (req, reply) => {
+    const { body } = getValidated<z.infer<typeof CreateUser>>(req);
+    const user = await users.create(body);
+    return reply.code(201).send(created(user, { requestId: req.id }));
+  });
+
+  return app;
+}
+```
+
+```ts title="src/server.ts"
+const app = await buildApp();
+await app.listen({ port: env.PORT, host: "0.0.0.0" });
+process.on("SIGTERM", () => void app.close());
+```
+
+The repository contains this app, with tests, in
+[`examples/fastify-app`](https://github.com/Obiorachibuike/NexKit/tree/main/examples/fastify-app).
+
+## Plugin options
+
+```ts
+await app.register(nexkit, {
+  logger,                       // Logger used for request logs and error logs
+  requestContext: { … } | false, // see Request utilities; false disables
+  secureHeaders: { … } | false,  // see Security; false disables
+  health: registry | { registry, livenessPath, readinessPath },
+  rateLimit: { limiter, keyGenerator, cost, skip, headers, style, onStoreError },
+  errorHandler: { logClientErrors, includeRequestId, onError, formatBody } | false,
+  notFoundHandler: true,        // false keeps Fastify's default 404 body
+});
+```
+
+The plugin is registered **without encapsulation** (it uses `fastify-plugin` semantics via
+the `skip-override` symbol), so its hooks and handlers apply to the whole instance and to
+plugins registered afterwards.
+
+## Request ids
+
+Fastify assigns `req.id` through `genReqId`, which runs before any hook. Pass
+`requestIdGenerator()` to the factory so ids are NexKit-validated and shared between
+Fastify's own logging and NexKit's context. If you omit it, the plugin still sets the
+response header and context, but `req.id` will be Fastify's counter-based id.
+
+## Validation
+
+Two complementary mechanisms:
+
+- **Fastify JSON Schema** (`schema: { body: … }`) — fast, integrated with serialization and
+  OpenAPI tooling. Its validation errors are normalized by NexKit into the standard `422`
+  envelope.
+- **`validateRequest` preHandler** — Standard Schema (Zod, Valibot…) with TypeScript inference
+  and transformations. Results via `getValidated(req)`.
+
+Use whichever fits; both produce the same error shape.
+
+## Per-route rate limits
+
+```ts
+import { rateLimitHook } from "@nexkitjs/fastify";
+
+app.post("/login", { preHandler: rateLimitHook({ limiter: loginLimiter, keyGenerator: (req) => req.ip }) }, handler);
+```
+
+## Error handling
+
+The plugin installs `setErrorHandler` and `setNotFoundHandler`. Errors are normalized
+(`FST_ERR_CTP_BODY_TOO_LARGE` → 413, schema errors → 422, unknown → 500 hidden), logged
+with the request id, and sent as the standard envelope with any `err.headers` applied.
+Hooks: `onError(err, req, reply)` and `formatBody(err, req)`.
+
+## Testing
+
+```ts
+const app = await buildApp();
+const res = await app.inject({ method: "GET", url: "/users/999", headers: { "x-request-id": "test-123" } });
+expect(res.statusCode).toBe(404);
+expect(res.headers["x-request-id"]).toBe("test-123");
+expect(res.json().error.code).toBe("NOT_FOUND");
+```

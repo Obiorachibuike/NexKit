@@ -1,0 +1,173 @@
+# Error handling
+
+`@nexkitjs/errors` gives every error in your service a **stable code**, an **HTTP status**
+and a clear line between what the client may see and what only your logs should contain.
+
+```bash
+npm install @nexkitjs/errors
+```
+
+## `AppError`
+
+```ts
+import { AppError } from "@nexkitjs/errors";
+
+throw new AppError("Plan limit reached for workspace 42", {
+  code: "PLAN_LIMIT",         // stable machine-readable code (defaults from status)
+  status: 402,                // HTTP status (defaults from code, else 500)
+  publicMessage: "Upgrade your plan to add more members",
+  details: { limit: 5 },      // public, JSON-serializable
+  meta: { workspaceId: 42 },  // internal only (logged, redacted)
+  cause: originalError,       // internal only
+  headers: { "Retry-After": "3600" },
+});
+```
+
+| Property        | Visible to clients | Purpose                                                        |
+| --------------- | ------------------ | -------------------------------------------------------------- |
+| `code`          | yes                | Stable identifier for programmatic handling                     |
+| `status`        | yes                | HTTP status code                                               |
+| `message`       | **only if exposed**| Internal description; exposed for 4xx, hidden for 5xx by default |
+| `publicMessage` | yes                | Explicit client-facing message                                  |
+| `details`       | yes                | Structured public data (validation issues, limits…)             |
+| `meta`          | no                 | Internal context for logs                                       |
+| `cause`         | no                 | Underlying error                                                |
+| `headers`       | yes (as headers)   | Response headers to send with the error                         |
+| `expose`        | —                  | Overrides the default visibility of `message`                   |
+
+### Public vs internal
+
+```ts
+const err = new AppError("DB connection pool exhausted (host db-1)", { status: 503 });
+
+err.toPublicJSON();
+// { code: "SERVICE_UNAVAILABLE", message: "Service Unavailable", status: 503 }
+
+err.toInternalJSON();
+// { ...public, name: "AppError", internalMessage: "DB connection pool exhausted (host db-1)",
+//   expose: false, stack: "…", meta: undefined, cause: undefined }
+```
+
+Rule of thumb implemented by `publicMessage` resolution:
+
+1. `publicMessage` if provided;
+2. otherwise `message` if `expose` is true (default for status < 500);
+3. otherwise the generic HTTP status text (`"Internal Server Error"`).
+
+## HTTP error classes
+
+Each class presets `code` and `status`. All accept `(message?, options?)`.
+
+| Class                        | Status | Code                       |
+| ---------------------------- | ------ | -------------------------- |
+| `BadRequestError`            | 400    | `BAD_REQUEST`              |
+| `UnauthorizedError`          | 401    | `UNAUTHORIZED`             |
+| `ForbiddenError`             | 403    | `FORBIDDEN`                |
+| `NotFoundError`              | 404    | `NOT_FOUND`                |
+| `MethodNotAllowedError`      | 405    | `METHOD_NOT_ALLOWED`       |
+| `ConflictError`              | 409    | `CONFLICT`                 |
+| `GoneError`                  | 410    | `GONE`                     |
+| `PayloadTooLargeError`       | 413    | `PAYLOAD_TOO_LARGE`        |
+| `UnsupportedMediaTypeError`  | 415    | `UNSUPPORTED_MEDIA_TYPE`   |
+| `UnprocessableEntityError`   | 422    | `UNPROCESSABLE_ENTITY`     |
+| `ValidationError`            | 422    | `VALIDATION_ERROR` (+ `issues`) |
+| `TooManyRequestsError` / `RateLimitError` | 429 | `RATE_LIMITED` (+ `Retry-After`) |
+| `InternalError`              | 500    | `INTERNAL_ERROR`           |
+| `NotImplementedError`        | 501    | `NOT_IMPLEMENTED`          |
+| `BadGatewayError`            | 502    | `BAD_GATEWAY`              |
+| `ServiceUnavailableError`    | 503    | `SERVICE_UNAVAILABLE`      |
+| `GatewayTimeoutError`        | 504    | `GATEWAY_TIMEOUT`          |
+
+```ts
+import { NotFoundError, ValidationError } from "@nexkitjs/errors";
+
+throw new NotFoundError("User not found");
+throw new ValidationError([{ path: "email", message: "must be an email" }], "Invalid input");
+throw ValidationError.forField("email", "must be an email");
+```
+
+`ErrorCodes`, `CODE_TO_STATUS`, `STATUS_TO_CODE`, `codeToStatus()`, `statusToCode()`,
+`httpStatusText()` and `isErrorStatus()` expose the mapping tables.
+
+## Domain errors
+
+Extend `AppError` for your own error types; the adapters treat them like any other:
+
+```ts
+export class InsufficientFundsError extends AppError {
+  constructor(balance: number, required: number) {
+    super(`Balance ${balance} below required ${required}`, {
+      code: "INSUFFICIENT_FUNDS",
+      status: 409,
+      publicMessage: "Insufficient funds",
+      details: { required },
+    });
+  }
+}
+```
+
+## `normalizeError`
+
+Converts **anything** thrown into an `AppError`. The adapters call it for you; use it
+directly in workers or custom handlers.
+
+```ts
+import { normalizeError } from "@nexkitjs/errors";
+
+const err = normalizeError(unknownThing);
+err.status; // 500 unless the input was recognisable
+```
+
+Recognised inputs:
+
+- `AppError` instances (returned as-is);
+- errors with a numeric `status`/`statusCode` from body parsers and frameworks
+  (e.g. body-parser's `entity.too.large` → 413, Fastify's `FST_ERR_CTP_BODY_TOO_LARGE` → 413,
+  Fastify schema validation errors → 422 `ValidationError`);
+- `TimeoutError` from `@nexkitjs/core` → 504;
+- everything else → `InternalError` with `expose: false` and the original as `cause`.
+
+Options: `trustForeignStatus` (default true — honour 4xx/5xx from foreign errors) and
+`fallbackMessage`.
+
+## `serializeError`
+
+Produces a log-safe representation with nested causes and redacted `meta`:
+
+```ts
+import { serializeError } from "@nexkitjs/errors";
+
+serializeError(err, { includeStack: true, maxCauseDepth: 3, redact: { keys: ["ssn"] } });
+```
+
+`@nexkitjs/logger` uses this automatically when you log an error.
+
+## `assert`
+
+```ts
+import { assert, ForbiddenError } from "@nexkitjs/errors";
+
+assert(user.role === "admin", () => new ForbiddenError("Admins only"));
+assert(input.length > 0, "Input required"); // BadRequestError
+```
+
+## Error responses on the wire
+
+Both adapters respond with the same envelope, produced by `errorBody()` from
+`@nexkitjs/response`:
+
+```json
+{
+  "success": false,
+  "error": {
+    "code": "VALIDATION_ERROR",
+    "message": "Request validation failed",
+    "status": 422,
+    "details": { "issues": [{ "path": "body.email", "message": "Invalid email" }] }
+  },
+  "requestId": "7b1d0c2e-5f7a-4c3b-9e2d-1a2b3c4d5e6f"
+}
+```
+
+See [Express](/docs/express/#error-handling) and [Fastify](/docs/fastify/#error-handling)
+for logging behaviour and customisation hooks.

@@ -1,0 +1,84 @@
+# Publishing
+
+How the `@nexkitjs/*` packages are versioned and released. This is mostly relevant to
+maintainers, but it also explains the compatibility guarantees users can expect.
+
+## Package names
+
+| Package              | npm name              |
+| -------------------- | --------------------- |
+| Core primitives      | `@nexkitjs/core`      |
+| Config validation    | `@nexkitjs/config`    |
+| Errors               | `@nexkitjs/errors`    |
+| Logger               | `@nexkitjs/logger`    |
+| Health checks        | `@nexkitjs/health`    |
+| API responses        | `@nexkitjs/response`  |
+| Rate limiting        | `@nexkitjs/ratelimit` |
+| Express adapter      | `@nexkitjs/express`   |
+| Fastify adapter      | `@nexkitjs/fastify`   |
+| Test utilities       | `@nexkitjs/testing`   |
+| CLI (`nexkit` binary)| `@nexkitjs/cli`       |
+
+<Callout type="note" title="Why not @nexkit?">
+  The unscoped name `nexkit` and the `@nexkit` scope were already registered on npm by
+  unrelated parties. `@nexkitjs` was available. If you fork under another scope, replace
+  `@nexkitjs/` across the repository and update `scripts/expected-exports.json`.
+</Callout>
+
+## Versioning
+
+- All packages share **one version** (a Changesets "fixed" group). `@nexkitjs/express@x.y.z`
+  is always tested against `@nexkitjs/core@x.y.z`.
+- On `0.x`, minor releases may include breaking changes, always listed in the changelog.
+  From `1.0.0`, the documented API follows SemVer.
+- Node support: `>= 20`. The minimum will only move in a minor release with a changelog note,
+  after the version reaches end-of-life.
+
+## Release flow
+
+1. Contributors add a changeset with their PR:
+
+   ```bash
+   npm run changeset
+   ```
+
+2. On merge to `main`, the **Release** workflow (`changesets/action`) opens or updates a
+   *"chore: version packages"* pull request that bumps versions and writes `CHANGELOG.md`
+   entries.
+
+3. Merging that PR triggers `npm run release` → `npm run build && changeset publish`. Packages
+   are published with `--access public` and **npm provenance** (`id-token: write`), and git
+   tags are pushed.
+
+Required secret: `NPM_TOKEN` (automation token for the `@nexkitjs` scope).
+
+## Manual release (fallback)
+
+```bash
+npm ci
+npm run check            # lint + build + tests + export verification
+npm run verify:pack      # pack → install tarballs into a fresh project → run smoke app + CLI
+npm run version-packages
+git commit -am "chore: version packages"
+npm login
+npm run release
+git push --follow-tags
+```
+
+## What a tarball contains
+
+```
+dist/         ESM JavaScript, .d.ts, source maps
+README.md
+LICENSE
+package.json  type: module, exports map, engines, publishConfig.access: public
+```
+
+Source `.ts`, tests and configs are excluded by `files`. The `verify:pack` script installs
+the real tarballs into a temporary project outside the monorepo and runs an Express + Fastify
+smoke app plus the CLI, so broken `exports` maps or missing files fail before publishing.
+
+## Deprecation policy
+
+Prefer `npm deprecate @nexkitjs/<name>@<range> "<message>"` over unpublishing, which npm
+restricts and which breaks lockfiles.

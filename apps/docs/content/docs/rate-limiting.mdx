@@ -1,0 +1,168 @@
+# Rate limiting
+
+`@nexkitjs/ratelimit` defines a small **`RateLimiter` contract** and provides adapters so
+you can plug established rate-limit implementations into NexKit's Express and Fastify
+middleware with consistent headers and error responses.
+
+```bash
+npm install @nexkitjs/ratelimit
+```
+
+<Callout type="warning" title="What NexKit does not ship">
+  NexKit does **not** ship a distributed rate limiter. The in-memory store counts per
+  process and is named and documented accordingly. For anything running on more than one
+  instance, use Redis or a library such as `rate-limiter-flexible`.
+</Callout>
+
+## The contract
+
+```ts
+interface RateLimiter {
+  consume(key: string, cost?: number): Promise<RateLimitDecision>;
+  reset?(key: string): Promise<void>;
+}
+
+interface RateLimitDecision {
+  allowed: boolean;
+  limit: number;
+  remaining: number;
+  resetAt: number;        // epoch ms when the window resets
+  retryAfterMs: number;   // 0 when allowed
+}
+```
+
+Anything implementing this can be passed to the adapters.
+
+## Option 1 — `rate-limiter-flexible` (recommended)
+
+[`rate-limiter-flexible`](https://github.com/animir/node-rate-limiter-flexible) supports
+Redis, Memcached, MongoDB, PostgreSQL, MySQL, DynamoDB, Prisma, cluster and memory backends
+with atomic increments.
+
+```bash
+npm install rate-limiter-flexible ioredis
+```
+
+```ts
+import Redis from "ioredis";
+import { RateLimiterRedis } from "rate-limiter-flexible";
+import { adaptRateLimiterFlexible } from "@nexkitjs/ratelimit";
+
+const redis = new Redis(env.REDIS_URL);
+const limiter = adaptRateLimiterFlexible(
+  new RateLimiterRedis({ storeClient: redis, keyPrefix: "api", points: 100, duration: 60 }),
+);
+```
+
+## Option 2 — fixed window over Redis
+
+```ts
+import { createFixedWindowLimiter, createRedisStore } from "@nexkitjs/ratelimit";
+
+const limiter = createFixedWindowLimiter({
+  store: createRedisStore(redis),   // ioredis / node-redis-like client
+  limit: 100,
+  windowMs: 60_000,
+  keyPrefix: "rl:",
+});
+```
+
+`createRedisStore` runs a Lua script (`INCRBY` + `PEXPIRE` atomically) when the client
+exposes `eval`, and falls back to sequential `incrby`/`pexpire`/`pttl` calls otherwise (a
+small race on the first hit of a window, acceptable for most APIs). It needs an
+`ioredis`-style client with `incrby`, `pexpire`, `pttl`, `del` and optionally `eval`.
+
+## Option 3 — memory store (single process only)
+
+```ts
+import { createFixedWindowLimiter, MemoryRateLimitStore } from "@nexkitjs/ratelimit";
+
+const limiter = createFixedWindowLimiter({
+  store: new MemoryRateLimitStore(),
+  limit: 100,
+  windowMs: 60_000,
+});
+```
+
+Use for local development, tests and genuinely single-instance deployments. Behind a load
+balancer the effective limit is `limit × instances`, counters reset on restart, and
+`cleanupIntervalMs` controls the purge timer (unref'd so it never keeps the process alive).
+
+## Wiring into the adapters
+
+<Tabs items={["Express", "Fastify"]} group="framework">
+<Tab>
+
+```ts
+import { rateLimit } from "@nexkitjs/express";
+
+app.use("/api", rateLimit({
+  limiter,
+  keyGenerator: (req) => req.user?.id ?? req.ip ?? "anonymous",
+  cost: (req) => (req.method === "GET" ? 1 : 5),
+  skip: (req) => req.path.startsWith("/api/public"),
+  style: "both",            // RateLimit-* (IETF draft) + X-RateLimit-* headers
+  onStoreError: "allow",    // fail-open when the store is down (default)
+}));
+```
+
+</Tab>
+<Tab>
+
+```ts
+import { rateLimitHook } from "@nexkitjs/fastify";
+
+await app.register(nexkit, { rateLimit: { limiter, keyGenerator: (req) => req.ip } });
+
+// or per route
+app.post("/login", { preHandler: rateLimitHook({ limiter: loginLimiter, keyGenerator: (req) => req.ip }) }, handler);
+```
+
+</Tab>
+</Tabs>
+
+When a request is denied the client receives:
+
+```http
+HTTP/1.1 429 Too Many Requests
+Retry-After: 42
+RateLimit-Limit: 100
+RateLimit-Remaining: 0
+RateLimit-Reset: 42
+
+{ "success": false, "error": { "code": "RATE_LIMITED", "message": "Too Many Requests", "status": 429 } }
+```
+
+## Helpers
+
+```ts
+import { rateLimitHeaders, rateLimitError, noopRateLimiter } from "@nexkitjs/ratelimit";
+
+rateLimitHeaders(decision, { style: "standard" | "legacy" | "both" });
+// { "ratelimit-limit": "100", "ratelimit-remaining": "0", "ratelimit-reset": "42", "retry-after": "42" }
+
+throw rateLimitError(decision); // TooManyRequestsError with Retry-After
+
+const limiter = env.NODE_ENV === "test" ? noopRateLimiter : realLimiter;
+```
+
+## Testing
+
+```ts
+import { createTestRateLimiter } from "@nexkitjs/testing";
+
+const { limiter, clock } = createTestRateLimiter({ limit: 2, windowMs: 1000 });
+await limiter.consume("k"); await limiter.consume("k");
+expect((await limiter.consume("k")).allowed).toBe(false);
+clock.advance(1001);
+expect((await limiter.consume("k")).allowed).toBe(true);
+```
+
+## Choosing a strategy
+
+| Need                                         | Use                                             |
+| -------------------------------------------- | ----------------------------------------------- |
+| Multiple instances, Redis available          | `adaptRateLimiterFlexible(RateLimiterRedis)` or `createRedisStore` |
+| Sliding windows, penalties, insurance limiter| `rate-limiter-flexible` (it implements them)      |
+| Single process / tests                       | `MemoryRateLimitStore`                           |
+| Edge/CDN rate limiting already in place      | Skip app-level limiting or use `noopRateLimiter` |

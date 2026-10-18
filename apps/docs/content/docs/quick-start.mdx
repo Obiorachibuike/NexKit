@@ -1,0 +1,194 @@
+# Quick start
+
+This walkthrough creates a small but production-shaped API in about five minutes using the
+CLI. If you prefer to wire things by hand, the [Express](/docs/express/) and
+[Fastify](/docs/fastify/) pages show every piece explicitly.
+
+## 1. Create a project
+
+```bash
+mkdir my-api && cd my-api
+npm init -y
+npm pkg set type=module
+npm install -D typescript tsx @types/node
+npx tsc --init --module nodenext --moduleResolution nodenext --target es2022 --strict --outDir dist --rootDir src
+```
+
+## 2. Scaffold with NexKit
+
+<Tabs items={["Express", "Fastify"]} group="framework">
+<Tab>
+
+```bash
+npx @nexkitjs/cli init --framework express
+npm install @nexkitjs/config @nexkitjs/logger @nexkitjs/health @nexkitjs/ratelimit @nexkitjs/express express
+```
+
+</Tab>
+<Tab>
+
+```bash
+npx @nexkitjs/cli init --framework fastify
+npm install @nexkitjs/config @nexkitjs/logger @nexkitjs/health @nexkitjs/ratelimit @nexkitjs/fastify fastify
+```
+
+</Tab>
+</Tabs>
+
+`init` writes three files and prints the exact install command for your package manager:
+
+```
+src/config/env.ts   typed environment schema (validateEnv)
+src/nexkit.ts       createNexkit(): logger, health registry and framework wiring
+.env.example        documented template generated from the schema
+```
+
+Open `src/config/env.ts` — it is plain code you own:
+
+```ts title="src/config/env.ts"
+import { defineEnvSchema, validateEnv, type InferEnv } from "@nexkitjs/config";
+
+export const envSchema = defineEnvSchema({
+  NODE_ENV: {
+    type: "enum",
+    values: ["development", "test", "production"],
+    default: "development",
+    description: "Runtime environment",
+  },
+  PORT: { type: "port", default: 3000, description: "HTTP port to listen on" },
+  LOG_LEVEL: {
+    type: "enum",
+    values: ["trace", "debug", "info", "warn", "error", "fatal", "silent"],
+    default: "info",
+    description: "Minimum log level",
+  },
+  DATABASE_URL: { type: "url", optional: true, description: "Primary database connection string" },
+});
+
+export type Env = InferEnv<typeof envSchema>;
+
+/** Validated at import time: the process exits early if configuration is invalid. */
+export const env: Env = validateEnv(envSchema);
+```
+
+## 3. Write the server
+
+<Tabs items={["Express", "Fastify"]} group="framework">
+<Tab>
+
+```ts title="src/server.ts"
+import express from "express";
+import { NotFoundError } from "@nexkitjs/errors";
+import { ok, paginated, parsePagination } from "@nexkitjs/response";
+import { env } from "./config/env.js";
+import { createNexkit } from "./nexkit.js";
+
+const kit = createNexkit({ isProduction: env.NODE_ENV === "production" });
+const app = express();
+
+kit.before(app);                      // request context, secure headers, size limit, health, rate limit
+app.use(express.json({ limit: "1mb" }));
+
+const users = [{ id: "1", name: "Ada" }, { id: "2", name: "Linus" }];
+
+app.get("/users", (req, res) => {
+  const { page, pageSize, offset, limit } = parsePagination(req.query);
+  res.json(paginated(users.slice(offset, offset + limit), { page, pageSize, total: users.length }));
+});
+
+app.get("/users/:id", (req, res) => {
+  const user = users.find((u) => u.id === req.params.id);
+  if (!user) throw new NotFoundError(`User ${req.params.id} not found`);
+  res.json(ok(user));
+});
+
+kit.after(app);                       // 404 handler + error handler
+
+app.listen(env.PORT, () => kit.logger.info({ port: env.PORT }, "listening"));
+```
+
+</Tab>
+<Tab>
+
+```ts title="src/server.ts"
+import Fastify from "fastify";
+import { NotFoundError } from "@nexkitjs/errors";
+import { ok, paginated, parsePagination } from "@nexkitjs/response";
+import { env } from "./config/env.js";
+import { createNexkit } from "./nexkit.js";
+
+const kit = createNexkit({ isProduction: env.NODE_ENV === "production" });
+const app = Fastify({ genReqId: kit.genReqId, bodyLimit: 1024 * 1024 });
+await kit.register(app);              // request context, secure headers, health, rate limit, error handling
+
+const users = [{ id: "1", name: "Ada" }, { id: "2", name: "Linus" }];
+
+app.get("/users", async (req) => {
+  const { page, pageSize, offset, limit } = parsePagination(req.query as Record<string, unknown>);
+  return paginated(users.slice(offset, offset + limit), { page, pageSize, total: users.length });
+});
+
+app.get<{ Params: { id: string } }>("/users/:id", async (req) => {
+  const user = users.find((u) => u.id === req.params.id);
+  if (!user) throw new NotFoundError(`User ${req.params.id} not found`);
+  return ok(user);
+});
+
+await app.listen({ port: env.PORT, host: "0.0.0.0" });
+kit.logger.info({ port: env.PORT }, "listening");
+```
+
+</Tab>
+</Tabs>
+
+## 4. Run it
+
+```bash
+npx tsx src/server.ts
+```
+
+```bash
+curl -i localhost:3000/users/1
+# HTTP/1.1 200 OK
+# X-Request-Id: 7b1d0c2e-5f7a-4c3b-9e2d-1a2b3c4d5e6f
+# Content-Security-Policy: default-src 'none'; frame-ancestors 'none'
+# { "success": true, "data": { "id": "1", "name": "Ada" } }
+
+curl -s localhost:3000/users/9
+# { "success": false, "error": { "code": "NOT_FOUND", "message": "User 9 not found", "status": 404 } }
+
+curl -s localhost:3000/health/ready
+# { "status": "ok", "probe": "readiness", "uptime": 3.2, "checks": {} }
+```
+
+And in the terminal, one structured line per request:
+
+```json
+{"level":"info","levelValue":30,"time":"2026-10-16T09:00:00.000Z","msg":"request completed","name":"my-api","requestId":"7b1d0c2e-5f7a-4c3b-9e2d-1a2b3c4d5e6f","method":"GET","path":"/users/1","status":200,"durationMs":1.42}
+```
+
+Try breaking the configuration to see the startup check:
+
+```bash
+PORT=abc npx tsx src/server.ts
+# EnvValidationError: Invalid environment configuration (1 issue):
+#   - PORT: expected a port number between 0 and 65535
+```
+
+## 5. Add a readiness check
+
+```ts
+kit.health.register("postgres", async (signal) => {
+  await sql`select 1`.execute({ signal });
+}, { timeoutMs: 2000 });
+```
+
+`/health/ready` now returns `503` when Postgres is unreachable or slower than two seconds,
+and your orchestrator stops routing traffic to the instance.
+
+## Next steps
+
+- Validate request bodies with any Standard Schema library — see [Security](/docs/security/#input-validation).
+- Add Redis-backed rate limiting — see [Rate limiting](/docs/rate-limiting/).
+- Test it with [`@nexkitjs/testing`](/docs/testing/).
+- Deploy it — see [Deployment](/docs/deployment/).

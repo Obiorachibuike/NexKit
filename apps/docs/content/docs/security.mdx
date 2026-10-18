@@ -1,0 +1,190 @@
+# Security
+
+NexKit's security helpers are deliberately conventional: secure response headers, request
+size limits, schema-based input validation, sensitive-field redaction and safe error
+exposure. This page documents what each does, its defaults, and — just as importantly —
+what NexKit does **not** attempt.
+
+<Callout type="danger" title="No custom cryptography">
+  NexKit contains no cryptographic implementations beyond calling Node's `crypto.randomBytes`
+  for request ids. For hashing, encryption, signing or token generation use Node's `crypto`
+  module or audited libraries. Nothing here has been reviewed as a cryptographic primitive
+  and nothing is advertised as such.
+</Callout>
+
+## Secure headers
+
+`secureHeaders()` from `@nexkitjs/core` returns a header map; the Express middleware and
+Fastify plugin apply it and remove `X-Powered-By`. Defaults are tuned for **JSON APIs**:
+
+| Header                         | Default                                              |
+| ------------------------------ | ---------------------------------------------------- |
+| `Content-Security-Policy`      | `default-src 'none'; frame-ancestors 'none'`           |
+| `Strict-Transport-Security`    | `max-age=15552000; includeSubDomains` (180 days)       |
+| `X-Frame-Options`              | `DENY`                                                |
+| `X-Content-Type-Options`       | `nosniff`                                             |
+| `Referrer-Policy`              | `no-referrer`                                         |
+| `Cross-Origin-Opener-Policy`   | `same-origin`                                         |
+| `Cross-Origin-Resource-Policy` | `same-origin`                                         |
+| `X-DNS-Prefetch-Control`       | `off`                                                 |
+| `Permissions-Policy`           | camera, microphone, geolocation, payment, interest-cohort disabled |
+| removed                        | `X-Powered-By`, `Server`                              |
+
+```ts
+secureHeaders({
+  strictTransportSecurity: process.env.NODE_ENV === "production" ? { maxAge: 31536000, preload: true } : false,
+  contentSecurityPolicy: { directives: { "default-src": ["'self'"], "img-src": ["'self'", "data:"] } },
+  crossOriginResourcePolicy: "cross-origin", // API consumed from other origins
+  extra: { "X-Custom": "value" },
+});
+```
+
+Caveats:
+
+- **HSTS only makes sense over HTTPS.** Enabling it on a plain-HTTP dev server is harmless
+  for `localhost` but can lock browsers out of other hosts. The CLI-generated wiring turns it
+  off unless `isProduction` is true.
+- The default CSP blocks everything, which is right for an API that returns JSON. If the
+  same process serves HTML, set directives explicitly.
+- `Cross-Origin-Resource-Policy: same-origin` blocks cross-site embedding of responses; use
+  `"cross-origin"` for public APIs consumed by browsers on other domains (together with CORS,
+  which NexKit does not provide — use `cors` or `@fastify/cors`).
+
+## Request size limits
+
+```ts
+// Express — rejects early based on Content-Length, before the body is read
+app.use(requestSizeLimit({ maxBytes: "1mb" }));
+app.use(express.json({ limit: "1mb" })); // still set the parser limit for chunked bodies
+
+// Fastify — built in
+Fastify({ bodyLimit: 1024 * 1024 });
+```
+
+Oversized requests get `413 PAYLOAD_TOO_LARGE`. Body-parser and Fastify limit errors are
+normalized to the same response.
+
+## Input validation
+
+`validateRequest` accepts any schema implementing
+[Standard Schema v1](https://standardschema.dev) — Zod ≥ 3.24, Valibot, ArkType, Effect
+Schema and others — without NexKit depending on any of them.
+
+<Tabs items={["Express", "Fastify"]} group="framework">
+<Tab>
+
+```ts
+import { z } from "zod";
+import { validateRequest, getValidated } from "@nexkitjs/express";
+
+const CreateUser = z.object({ email: z.string().email(), name: z.string().min(1).max(80) });
+const Params = z.object({ id: z.string().uuid() });
+
+app.post("/users", validateRequest({ body: CreateUser }), (req, res) => {
+  const { body } = getValidated<z.infer<typeof CreateUser>>(req);
+  res.status(201).json(created(body));
+});
+
+app.get("/users/:id", validateRequest({ params: Params }), handler);
+```
+
+</Tab>
+<Tab>
+
+```ts
+import { z } from "zod";
+import { validateRequest, getValidated } from "@nexkitjs/fastify";
+
+const CreateUser = z.object({ email: z.string().email(), name: z.string().min(1).max(80) });
+
+app.post("/users", { preHandler: validateRequest({ body: CreateUser }) }, async (req, reply) => {
+  const { body } = getValidated<z.infer<typeof CreateUser>>(req);
+  return reply.code(201).send(created(body));
+});
+```
+
+</Tab>
+</Tabs>
+
+Failures become `422 VALIDATION_ERROR` with a sanitized issue list — paths and messages
+only, never the submitted values:
+
+```json
+{ "success": false, "error": { "code": "VALIDATION_ERROR", "message": "Request validation failed", "status": 422,
+  "details": { "issues": [{ "path": "body.email", "message": "Invalid email" }] } } }
+```
+
+Validated (and transformed) data is stored on the request and read with `getValidated()`,
+so downstream code uses parsed values — coerced numbers, trimmed strings, stripped unknown
+keys — instead of raw input.
+
+For zero-dependency validation of environment variables use
+[`@nexkitjs/config`](/docs/configuration/).
+
+## Sensitive-field redaction
+
+`redact()` is applied to log fields, error `meta`, request metadata, logged headers and
+query strings. It is **key-based**: any property whose name matches a sensitive pattern is
+replaced with `[REDACTED]` at any depth (arrays, nested objects, `Map`-like plain objects;
+cycles are handled).
+
+```ts
+import { redact, createRedactor, isSensitiveKey } from "@nexkitjs/core";
+
+redact({ password: "x", nested: { apiKey: "y", safe: 1 } });
+// { password: "[REDACTED]", nested: { apiKey: "[REDACTED]", safe: 1 } }
+
+const scrub = createRedactor({ keys: ["iban"], valuePatterns: [/\b\d{16}\b/g] });
+```
+
+What it does **not** do: detect secrets by value under an unrelated key (e.g.
+`note: "my password is hunter2"`), or scrub strings interpolated into log messages. Treat
+it as defence in depth, not a guarantee.
+
+## Error exposure
+
+- `AppError` messages for status ≥ 500 are replaced with generic text in responses;
+  stack traces are never sent.
+- Unknown exceptions are wrapped as `InternalError` with `expose: false`.
+- Health-check error messages are hidden unless `exposeErrorMessages: true`.
+- `EnvValidationError` messages name variables but never values.
+
+## Request ids
+
+Incoming `X-Request-Id` / `X-Correlation-Id` values are accepted only when they match
+`[A-Za-z0-9._:-]{1,128}`, preventing log injection and header stuffing. Set
+`trustIncomingRequestId: false` to ignore client-supplied ids entirely.
+
+## Rate limiting
+
+Rate limiting is part of a security posture, but a limiter that only counts per process is
+not a limiter in a multi-instance deployment. `@nexkitjs/ratelimit` ships adapters for Redis
+and `rate-limiter-flexible` and labels its memory store as single-process. See
+[Rate limiting](/docs/rate-limiting/). If a store becomes unavailable, the adapters
+default to **fail-open** (`onStoreError: "allow"`) to protect availability; choose
+`"deny"` for abuse-sensitive endpoints.
+
+## Reverse proxies
+
+`req.ip` (used for rate-limit keys and request logs) reflects the proxy unless the framework
+is told to trust it:
+
+```ts
+app.set("trust proxy", 1);            // Express, one hop
+Fastify({ trustProxy: true });        // Fastify
+```
+
+Trusting proxies you do not control lets clients spoof `X-Forwarded-For`.
+
+## Supply chain
+
+All `@nexkitjs` packages have **zero runtime dependencies** outside the scope, are published
+with npm provenance from GitHub Actions, and are built from the public repository. Report
+vulnerabilities as described in
+[SECURITY.md](https://github.com/Obiorachibuike/NexKit/blob/main/SECURITY.md).
+
+## What NexKit does not provide
+
+Authentication, authorization, sessions, CSRF protection, CORS, cookie signing, password
+hashing or encryption. Those are solved problems with excellent dedicated libraries; NexKit's
+job is to make the surrounding infrastructure consistent.
