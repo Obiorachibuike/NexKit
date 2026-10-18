@@ -72,7 +72,12 @@ for (const p of ordered) {
   // Provenance attestations require a CI OIDC provider (GitHub Actions); npm
   // rejects the flag for local publishes ("not supported for provider: null").
   // package.json#publishConfig enables provenance for CI; override it locally.
-  const args = ["publish", "--access", "public", `--provenance=${process.env.GITHUB_ACTIONS === "true"}`];
+  const args = [
+    "publish",
+    "--access",
+    "public",
+    `--provenance=${process.env.GITHUB_ACTIONS === "true"}`,
+  ];
   if (dryRun) args.push("--dry-run");
   console.log(`\n→ npm ${args.join(" ")}  (${name}@${version})`);
   try {
