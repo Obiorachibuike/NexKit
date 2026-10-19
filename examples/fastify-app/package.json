@@ -11,19 +11,19 @@
     "test": "vitest run --project fastify-example"
   },
   "dependencies": {
-    "@nexkitjs/config": "0.1.0",
-    "@nexkitjs/core": "0.1.0",
-    "@nexkitjs/errors": "0.1.0",
-    "@nexkitjs/fastify": "0.1.0",
-    "@nexkitjs/health": "0.1.0",
-    "@nexkitjs/logger": "0.1.0",
-    "@nexkitjs/ratelimit": "0.1.0",
-    "@nexkitjs/response": "0.1.0",
+    "@nexkitjs/config": "0.2.0",
+    "@nexkitjs/core": "0.2.0",
+    "@nexkitjs/errors": "0.2.0",
+    "@nexkitjs/fastify": "0.2.0",
+    "@nexkitjs/health": "0.2.0",
+    "@nexkitjs/logger": "0.2.0",
+    "@nexkitjs/ratelimit": "0.2.0",
+    "@nexkitjs/response": "0.2.0",
     "fastify": "^5.3.0",
     "zod": "^4.0.0"
   },
   "devDependencies": {
-    "@nexkitjs/testing": "0.1.0",
+    "@nexkitjs/testing": "0.2.0",
     "tsx": "^4.20.0"
   }
 }

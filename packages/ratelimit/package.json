@@ -1,6 +1,6 @@
 {
   "name": "@nexkitjs/ratelimit",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Rate-limiting adapter interfaces and helpers for integrating established rate limiters into NexKit adapters.",
   "keywords": [
     "nexkit",
@@ -50,7 +50,7 @@
     "test": "vitest run --project ratelimit"
   },
   "dependencies": {
-    "@nexkitjs/core": "0.1.0",
-    "@nexkitjs/errors": "0.1.0"
+    "@nexkitjs/core": "0.2.0",
+    "@nexkitjs/errors": "0.2.0"
   }
 }

@@ -1,6 +1,6 @@
 {
   "name": "@nexkitjs/testing",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Test utilities for applications built with NexKit: log capture, env fixtures, error assertions.",
   "keywords": [
     "nexkit",
@@ -50,9 +50,9 @@
     "test": "vitest run --project testing"
   },
   "dependencies": {
-    "@nexkitjs/core": "0.1.0",
-    "@nexkitjs/errors": "0.1.0",
-    "@nexkitjs/logger": "0.1.0",
-    "@nexkitjs/ratelimit": "0.1.0"
+    "@nexkitjs/core": "0.2.0",
+    "@nexkitjs/errors": "0.2.0",
+    "@nexkitjs/logger": "0.2.0",
+    "@nexkitjs/ratelimit": "0.2.0"
   }
 }

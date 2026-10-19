@@ -1,6 +1,6 @@
 {
   "name": "@nexkitjs/errors",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Standardized application errors with error codes, HTTP status mapping, safe public messages, and serialization helpers.",
   "keywords": [
     "nexkit",
@@ -50,6 +50,6 @@
     "test": "vitest run --project errors"
   },
   "dependencies": {
-    "@nexkitjs/core": "0.1.0"
+    "@nexkitjs/core": "0.2.0"
   }
 }

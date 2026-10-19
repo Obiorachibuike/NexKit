@@ -1,6 +1,6 @@
 {
   "name": "@nexkitjs/health",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Liveness and readiness checks with timeouts, custom check registration, and sanitized reports.",
   "keywords": [
     "nexkit",
@@ -51,6 +51,6 @@
     "test": "vitest run --project health"
   },
   "dependencies": {
-    "@nexkitjs/core": "0.1.0"
+    "@nexkitjs/core": "0.2.0"
   }
 }

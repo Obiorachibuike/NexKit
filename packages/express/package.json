@@ -1,6 +1,6 @@
 {
   "name": "@nexkitjs/express",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Express middleware for NexKit: request IDs, timing, structured logging, secure headers, error handling, health routes, validation, and rate limiting.",
   "keywords": [
     "nexkit",
@@ -49,12 +49,12 @@
     "test": "vitest run --project express"
   },
   "dependencies": {
-    "@nexkitjs/core": "0.1.0",
-    "@nexkitjs/errors": "0.1.0",
-    "@nexkitjs/health": "0.1.0",
-    "@nexkitjs/logger": "0.1.0",
-    "@nexkitjs/ratelimit": "0.1.0",
-    "@nexkitjs/response": "0.1.0"
+    "@nexkitjs/core": "0.2.0",
+    "@nexkitjs/errors": "0.2.0",
+    "@nexkitjs/health": "0.2.0",
+    "@nexkitjs/logger": "0.2.0",
+    "@nexkitjs/ratelimit": "0.2.0",
+    "@nexkitjs/response": "0.2.0"
   },
   "peerDependencies": {
     "express": ">=4.18.0 <6"

@@ -1,6 +1,6 @@
 {
   "name": "@nexkitjs/cli",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "NexKit CLI: scaffold config, generate middleware, and diagnose your project setup.",
   "keywords": [
     "nexkit",

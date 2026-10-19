@@ -1,6 +1,6 @@
 {
   "name": "@nexkitjs/response",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Consistent API response envelopes, pagination metadata, and validation-error formatting with strong types.",
   "keywords": [
     "nexkit",
@@ -50,7 +50,7 @@
     "test": "vitest run --project response"
   },
   "dependencies": {
-    "@nexkitjs/core": "0.1.0",
-    "@nexkitjs/errors": "0.1.0"
+    "@nexkitjs/core": "0.2.0",
+    "@nexkitjs/errors": "0.2.0"
   }
 }

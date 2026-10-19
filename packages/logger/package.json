@@ -1,6 +1,6 @@
 {
   "name": "@nexkitjs/logger",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Structured JSON logger with levels, child loggers, request correlation, error serialization, and secret redaction.",
   "keywords": [
     "nexkit",
@@ -51,6 +51,6 @@
     "test": "vitest run --project logger"
   },
   "dependencies": {
-    "@nexkitjs/core": "0.1.0"
+    "@nexkitjs/core": "0.2.0"
   }
 }
