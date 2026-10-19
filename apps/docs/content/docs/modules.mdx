@@ -1,0 +1,121 @@
+# Module directory
+
+Every NexKit package, what it is for and when to reach for it. All packages are ESM, ship
+TypeScript declarations, support Node ≥ 20 and have no runtime dependencies outside the
+`@nexkitjs` scope.
+
+## Core modules (framework-agnostic)
+
+### @nexkitjs/core
+
+Primitives the other packages build on. You rarely install it directly, but you may import
+from it:
+
+- `redact` / `createRedactor` — key-based sensitive-field redaction.
+- `runWithRequestContext`, `getRequestId`, `getCorrelationId` — AsyncLocalStorage request context.
+- `generateRequestId`, `isValidRequestId`, `resolveRequestId` — safe request-id handling.
+- `withTimeout`, `TimeoutError`, `startTimer` — bounded async work.
+- `parseByteSize` / `formatByteSize` — `"1mb"` ↔ `1048576`.
+- `parseWith` / `parseWithSync` — validate with any Standard Schema library.
+- `secureHeaders()` — a header map; adapters apply it.
+
+→ [API reference](/docs/api-reference/#nexkitjscore)
+
+### @nexkitjs/config
+
+`validateEnv(schema)` turns `process.env` into a typed, frozen object or throws an
+`EnvValidationError` listing every problem by name. Also `safeValidateEnv`, `maskEnv`,
+`generateEnvExample`, `defineEnvSchema`, `InferEnv`.
+
+→ [Configuration](/docs/configuration/)
+
+### @nexkitjs/errors
+
+`AppError` with `code`, `status`, public/internal message separation, `details`, `meta`,
+`cause` and `headers`; HTTP subclasses (`NotFoundError`, `ValidationError`, …);
+`normalizeError` to coerce anything into an `AppError`; `serializeError` for logs.
+
+→ [Error handling](/docs/errors/)
+
+### @nexkitjs/logger
+
+`createLogger()` — NDJSON structured logging with levels, `child()` loggers, redaction,
+error serialization and request correlation; `json`, `pretty`, `memory`, `multi` and
+`callback` transports.
+
+→ [Logging](/docs/logging/)
+
+### @nexkitjs/health
+
+`createHealthRegistry()` — register checks with timeouts, criticality and probe type;
+`liveness()` / `readiness()` reports; `healthStatusCode()`; built-in `memoryHeapCheck`
+and `eventLoopLagCheck`.
+
+→ [Health checks](/docs/health-checks/)
+
+### @nexkitjs/response
+
+`ok`, `created`, `paginated`, `cursorPaginated`, `errorBody`, `parsePagination`,
+`formatValidationIssues` and the `ApiResponse` types.
+
+→ [API responses](/docs/responses/)
+
+### @nexkitjs/ratelimit
+
+The `RateLimiter` / `RateLimitStore` contracts, `createFixedWindowLimiter`,
+`MemoryRateLimitStore` (single-process), `createRedisStore`, `adaptRateLimiterFlexible`,
+`rateLimitHeaders`, `rateLimitError`.
+
+→ [Rate limiting](/docs/rate-limiting/)
+
+## Adapters
+
+### @nexkitjs/express
+
+Middleware: `requestContext`, `secureHeaders`, `requestSizeLimit`, `validateRequest` +
+`getValidated`, `healthRoutes`, `rateLimit`, `notFoundHandler`, `errorHandler`,
+`asyncHandler`. Express 4 and 5.
+
+→ [Express](/docs/express/)
+
+### @nexkitjs/fastify
+
+The `nexkit` plugin (request context, secure headers, health routes, rate limit, error and
+404 handlers) plus `requestIdGenerator`, `rateLimitHook`, `validateRequest`, `getValidated`.
+Fastify 4 and 5.
+
+→ [Fastify](/docs/fastify/)
+
+## Tooling
+
+### @nexkitjs/cli
+
+`nexkit init`, `nexkit doctor`, `nexkit generate config`, `nexkit generate middleware`.
+Generates plain TypeScript you own.
+
+→ [CLI](/docs/cli/)
+
+### @nexkitjs/testing
+
+`createTestLogger`, `withEnv`, `expectAppError`, `rejected`, `runInTestContext`,
+`createManualClock`, `createTestRateLimiter`, `healthCheckStub`.
+
+→ [Testing](/docs/testing/)
+
+## Dependency graph
+
+```
+core ◄── errors ◄── config
+ ▲         ▲
+ │         ├── response
+ │         ├── health
+ │         └── ratelimit
+ ├── logger
+ │
+ └── express / fastify  (depend on core, errors, logger, health, response, ratelimit)
+     testing            (depends on core, errors, logger, health, ratelimit)
+     cli                (no runtime deps; generates code that imports the above)
+```
+
+Installing an adapter installs everything it needs. Installing `config` alone installs only
+`core` and `errors`.

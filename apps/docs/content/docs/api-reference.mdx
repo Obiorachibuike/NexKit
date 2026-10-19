@@ -1,0 +1,2583 @@
+{/* GENERATED FILE — do not edit by hand. Run `npm run build:api --workspace apps/docs`. */}
+
+# API reference
+
+Every public export of every `@nexkitjs` package, generated from the TypeScript sources by
+`apps/docs/scripts/build-api-reference.mjs`. Runtime exports are additionally verified
+against `scripts/expected-exports.json` in CI. Type-only exports are listed in their own
+section per package.
+
+| Package | Runtime exports | Types |
+| --- | --- | --- |
+| [`@nexkitjs/core`](#nexkitjscore) | 35 | 17 |
+| [`@nexkitjs/config`](#nexkitjsconfig) | 7 | 15 |
+| [`@nexkitjs/errors`](#nexkitjserrors) | 30 | 10 |
+| [`@nexkitjs/logger`](#nexkitjslogger) | 10 | 11 |
+| [`@nexkitjs/health`](#nexkitjshealth) | 4 | 9 |
+| [`@nexkitjs/response`](#nexkitjsresponse) | 9 | 15 |
+| [`@nexkitjs/ratelimit`](#nexkitjsratelimit) | 7 | 9 |
+| [`@nexkitjs/express`](#nexkitjsexpress) | 10 | 7 |
+| [`@nexkitjs/fastify`](#nexkitjsfastify) | 6 | 7 |
+| [`@nexkitjs/testing`](#nexkitjstesting) | 9 | 4 |
+| [`@nexkitjs/cli`](#nexkitjscli) | 17 | 8 |
+
+## @nexkitjs/core
+
+Framework-agnostic primitives for NexKit: redaction, request context, secure header presets, timeouts, and schema interop.
+
+```bash
+npm install @nexkitjs/core
+```
+
+### createRedactor
+
+Creates a reusable redactor function. Prefer this over `redact` in hot paths (e.g. loggers) so pattern compilation happens once.
+
+```ts
+function createRedactor(options: RedactOptions = {}): Redactor;
+```
+
+### createRequestContext
+
+Creates a fresh context object. Does not activate it.
+
+```ts
+function createRequestContext(init: Partial<RequestContext> & {
+    requestId: string;
+}): RequestContext;
+```
+
+### deepFreeze
+
+Deep-freezes an object graph (plain objects and arrays only).
+
+```ts
+function deepFreeze<T>(value: T): Readonly<T>;
+```
+
+### enterRequestContext
+
+Binds the given context to the *current* async execution. Use this in frameworks whose hook model doesn't let you wrap the continuation (e.g. some middleware chains). Prefer `runWithRequestContext` when possible.
+
+```ts
+function enterRequestContext(context: RequestContext): void;
+```
+
+### formatByteSize
+
+Formats a byte count as a short human-readable string (`1048576` → `"1 MB"`).
+
+```ts
+function formatByteSize(bytes: number, decimals = 1): string;
+```
+
+### formatIssuePath
+
+Formats raw path segments into dot/bracket notation.
+
+```ts
+function formatIssuePath(segments: ReadonlyArray<string | number>): string;
+```
+
+### generateRequestId
+
+Generates a new request id (a v4 UUID).
+
+```ts
+function generateRequestId(): string;
+```
+
+### getCorrelationId
+
+Returns the active correlation id, or `undefined` outside of a request.
+
+```ts
+function getCorrelationId(): string | undefined;
+```
+
+### getRequestContext
+
+Returns the active request context, or `undefined` when called outside a request.
+
+```ts
+function getRequestContext(): RequestContext | undefined;
+```
+
+### getRequestId
+
+Returns the active request id, or `undefined` outside of a request.
+
+```ts
+function getRequestId(): string | undefined;
+```
+
+### isObject
+
+Returns true for non-null objects that are not arrays.
+
+```ts
+function isObject(value: unknown): value is Record<string, unknown>;
+```
+
+### isPlainObject
+
+Returns true when `value` is a plain object literal (prototype is Object or null).
+
+```ts
+function isPlainObject(value: unknown): value is Record<string, unknown>;
+```
+
+### isSensitiveKey
+
+Returns true when the given key name matches a sensitive pattern.
+
+```ts
+function isSensitiveKey(key: string, options: RedactOptions = {}): boolean;
+```
+
+### isStandardSchema
+
+Returns true when `value` looks like a Standard Schema.
+
+```ts
+function isStandardSchema(value: unknown): value is StandardSchemaV1;
+```
+
+### isTimeoutError
+
+Returns true when `err` is a `TimeoutError` (or structurally equivalent).
+
+```ts
+function isTimeoutError(err: unknown): err is TimeoutError;
+```
+
+### isValidRequestId
+
+Validates an id received from an untrusted source (e.g. an `X-Request-Id` header). Ids are echoed into logs and response headers, so we only accept a conservative character set and length to prevent log injection and header abuse.
+
+```ts
+function isValidRequestId(value: unknown, options: RequestIdValidationOptions = {}): value is string;
+```
+
+### normalizeIssues
+
+Normalizes Standard Schema issues into `ValidationIssue`s.
+
+```ts
+function normalizeIssues(issues: ReadonlyArray<StandardSchemaV1.Issue>): ValidationIssue[];
+```
+
+### parseByteSize
+
+Parses a human-readable size (`"1mb"`, `"512kb"`, `"100"`, `1024`) into bytes. Throws a `RangeError` on invalid input. Numbers are treated as bytes.
+
+```ts
+function parseByteSize(input: string | number): number;
+```
+
+### parseWith
+
+Validates `input` against a Standard Schema, returning a discriminated result. Supports schemas whose `validate` is async.
+
+```ts
+async function parseWith<S extends StandardSchemaV1>(schema: S, input: unknown): Promise<ParseResult<StandardSchemaV1.InferOutput<S>>>;
+```
+
+### parseWithSync
+
+Synchronous variant of `parseWith`. Throws a `TypeError` if the schema performs asynchronous validation.
+
+```ts
+function parseWithSync<S extends StandardSchemaV1>(schema: S, input: unknown): ParseResult<StandardSchemaV1.InferOutput<S>>;
+```
+
+### redact
+
+Returns a deep copy of `value` with sensitive fields replaced. Never mutates the input.
+
+```ts
+function redact<T>(value: T, options?: RedactOptions): T;
+```
+
+### resolveRequestId
+
+Returns `candidate` if it's a valid incoming id, otherwise a freshly generated one. Accepts arrays (as produced by some header parsers) and uses the first value.
+
+```ts
+function resolveRequestId(candidate: unknown, options: RequestIdValidationOptions & {
+    trustIncoming?: boolean;
+} = {}): string;
+```
+
+### roundDuration
+
+Rounds a millisecond duration to a sensible precision for logs.
+
+```ts
+function roundDuration(ms: number, decimals = 2): number;
+```
+
+### runWithRequestContext
+
+Runs `fn` with the given context active for the duration of its (async) execution.
+
+```ts
+function runWithRequestContext<T>(context: RequestContext, fn: () => T): T;
+```
+
+### secureHeaders
+
+Builds the secure header map. All header names are lower-case.
+
+```ts
+function secureHeaders(options: SecureHeadersOptions = {}): Record<string, string>;
+```
+
+### serializeContentSecurityPolicy
+
+Serializes a CSP directive map into a header value.
+
+```ts
+function serializeContentSecurityPolicy(directives: Record<string, readonly string[] | string | boolean>): string;
+```
+
+### serializePermissionsPolicy
+
+Serializes a Permissions-Policy map (`{ camera: [] }` → `camera=()`).
+
+```ts
+function serializePermissionsPolicy(policy: Record<string, readonly string[]>): string;
+```
+
+### setRequestContextValue
+
+Attaches a value to the active request context (e.g. `userId` after authentication). Returns `false` when there is no active context.
+
+```ts
+function setRequestContextValue(key: string, value: unknown): boolean;
+```
+
+### startTimer
+
+Returns a function that reports elapsed milliseconds (fractional) since it was created.
+
+```ts
+function startTimer(): () => number;
+```
+
+### withTimeout
+
+Races a promise (or promise-returning function) against a timeout.
+
+```ts
+function withTimeout<T>(operation: Promise<T> | ((signal: AbortSignal) => Promise<T> | T), timeoutMs: number, options: WithTimeoutOptions = {}): Promise<T>;
+```
+
+### TimeoutError
+
+Thrown by `withTimeout` when the wrapped operation exceeds its deadline.
+
+```ts
+class TimeoutError extends Error {
+  readonly code: "TIMEOUT";
+  readonly timeoutMs: number;
+  constructor(timeoutMs: number, message?: string);
+}
+```
+
+### DEFAULT_REDACT_PATTERNS
+
+Key patterns that are treated as sensitive by default (matched case-insensitively).
+
+```ts
+const DEFAULT_REDACT_PATTERNS: readonly RegExp[];
+```
+
+### DEFAULT_REDACT_REPLACEMENT
+
+```ts
+const DEFAULT_REDACT_REPLACEMENT: "[REDACTED]";
+```
+
+### HEADERS_TO_REMOVE
+
+Headers that should be removed because they leak implementation details.
+
+```ts
+const HEADERS_TO_REMOVE: readonly string[];
+```
+
+### requestContextStorage
+
+The underlying `AsyncLocalStorage` instance. Exposed for advanced integrations.
+
+```ts
+const requestContextStorage: AsyncLocalStorage<RequestContext>;
+```
+
+### Types (core)
+
+#### ContentSecurityPolicyOptions
+
+Secure HTTP header presets.
+
+```ts
+interface ContentSecurityPolicyOptions {
+    directives?: Record<string, readonly string[] | string | boolean>;
+    reportOnly?: boolean;
+}
+```
+
+#### RedactOptions
+
+```ts
+interface RedactOptions {
+    keys?: ReadonlyArray<string | RegExp>;
+    replaceDefaults?: boolean;
+    replacement?: string;
+    maxDepth?: number;
+    valuePatterns?: readonly RegExp[];
+}
+```
+
+#### RequestContext
+
+Per-request context propagated through async calls via `AsyncLocalStorage`.
+
+```ts
+interface RequestContext {
+    requestId: string;
+    correlationId: string;
+    startTime: number;
+    [key: string]: unknown;
+}
+```
+
+#### RequestIdValidationOptions
+
+```ts
+interface RequestIdValidationOptions {
+    maxLength?: number;
+    pattern?: RegExp;
+}
+```
+
+#### SecureHeadersOptions
+
+```ts
+interface SecureHeadersOptions {
+    contentSecurityPolicy?: ContentSecurityPolicyOptions | false;
+    strictTransportSecurity?: StrictTransportSecurityOptions | false;
+    frameOptions?: "DENY" | "SAMEORIGIN" | false;
+    referrerPolicy?: string | false;
+    contentTypeOptions?: boolean;
+    crossOriginOpenerPolicy?: "same-origin" | "same-origin-allow-popups" | "unsafe-none" | false;
+    crossOriginResourcePolicy?: "same-origin" | "same-site" | "cross-origin" | false;
+    dnsPrefetchControl?: "on" | "off" | false;
+    permissionsPolicy?: Record<string, readonly string[]> | false;
+    downloadOptions?: boolean;
+    extra?: Record<string, string>;
+}
+```
+
+#### StandardSchemaV1
+
+Minimal copy of the Standard Schema v1 interface (kept dependency-free).
+
+```ts
+interface StandardSchemaV1<Input = unknown, Output = Input> {
+    readonly "~standard": StandardSchemaV1.Props<Input, Output>;
+}
+```
+
+#### StrictTransportSecurityOptions
+
+```ts
+interface StrictTransportSecurityOptions {
+    maxAge?: number;
+    includeSubDomains?: boolean;
+    preload?: boolean;
+}
+```
+
+#### ValidationIssue
+
+A normalized validation issue. `path` is dot/bracket notation (`"items[2].price"`).
+
+```ts
+interface ValidationIssue {
+    path: string;
+    message: string;
+    segments: ReadonlyArray<string | number>;
+}
+```
+
+#### WithTimeoutOptions
+
+```ts
+interface WithTimeoutOptions {
+    message?: string;
+    signal?: AbortSignal;
+}
+```
+
+#### JsonObject
+
+JSON-compatible object.
+
+```ts
+type JsonObject = {
+    [key: string]: JsonValue;
+};
+```
+
+#### JsonPrimitive
+
+JSON-compatible primitive.
+
+```ts
+type JsonPrimitive = string | number | boolean | null;
+```
+
+#### JsonValue
+
+JSON-compatible value.
+
+```ts
+type JsonValue = JsonPrimitive | JsonValue[] | {
+    [key: string]: JsonValue;
+};
+```
+
+#### MaybePromise
+
+A value or a promise of it.
+
+```ts
+type MaybePromise<T> = T | Promise<T>;
+```
+
+#### ParseResult
+
+```ts
+type ParseResult<T> = {
+    success: true;
+    data: T;
+    issues?: undefined;
+} | {
+    success: false;
+    data?: undefined;
+    issues: ValidationIssue[];
+};
+```
+
+#### Prettify
+
+Flattens intersections for nicer editor hover output.
+
+```ts
+type Prettify<T> = {
+    [K in keyof T]: T[K];
+} & {};
+```
+
+#### Redactor
+
+```ts
+type Redactor = <T>(value: T) => T;
+```
+
+#### RequireKeys
+
+Make selected keys of `T` required.
+
+```ts
+type RequireKeys<T, K extends keyof T> = T & Required<Pick<T, K>>;
+```
+
+## @nexkitjs/config
+
+Type-safe environment variable validation with defaults, helpful errors, and secret-safe reporting.
+
+```bash
+npm install @nexkitjs/config
+```
+
+### defineEnvSchema
+
+Identity helper that preserves literal types for later reuse (e.g. sharing a schema between `validateEnv` and `generateEnvExample`).
+
+```ts
+function defineEnvSchema<const S extends EnvSchema>(schema: S): S;
+```
+
+### generateEnvExample
+
+Generates `.env.example` content from a schema. Secret fields get a placeholder; defaults and descriptions are included as comments.
+
+```ts
+function generateEnvExample(schema: EnvSchema, options: {
+    prefix?: string;
+} = {}): string;
+```
+
+### isSecretField
+
+Returns true when a field should be treated as secret (explicit flag or key heuristics).
+
+```ts
+function isSecretField(key: string, field: EnvField): boolean;
+```
+
+### maskEnv
+
+Returns a copy of a validated env with secret fields replaced by `"[REDACTED]"`, suitable for printing at startup.
+
+```ts
+function maskEnv<S extends EnvSchema>(env: InferEnv<S>, schema: S, replacement = "[REDACTED]"): Record<string, unknown>;
+```
+
+### safeValidateEnv
+
+Validates environment variables against a schema **without throwing**. Returns either the typed env or a list of issues.
+
+```ts
+function safeValidateEnv<const S extends EnvSchema>(schema: S, options: ValidateEnvOptions = {}): SafeValidateResult<S>;
+```
+
+### validateEnv
+
+Validates environment variables against a schema and returns a typed, frozen object. Throws `EnvValidationError` listing **all** problems at once. Raw values are never included in errors.
+
+```ts
+function validateEnv<const S extends EnvSchema>(schema: S, options: ValidateEnvOptions = {}): InferEnv<S>;
+```
+
+### EnvValidationError
+
+Thrown by `validateEnv` when configuration is invalid. Maps to HTTP 500 with code `CONFIG_INVALID`; the message lists variable names and reasons only.
+
+```ts
+class EnvValidationError extends AppError {
+  readonly issues: readonly EnvIssue[];
+  constructor(issues: readonly EnvIssue[]);
+}
+```
+
+### Types (config)
+
+#### BooleanField
+
+```ts
+interface BooleanField extends BaseField<boolean> {
+    type: "boolean";
+}
+```
+
+#### CustomField
+
+```ts
+interface CustomField<T> extends BaseField<T> {
+    type: "custom";
+    parse: (raw: string, key: string) => T;
+}
+```
+
+#### EnumField
+
+```ts
+interface EnumField<V extends string = string> extends BaseField<V> {
+    type: "enum";
+    values: readonly V[];
+}
+```
+
+#### EnvIssue
+
+One problem with one environment variable. Never contains the raw value.
+
+```ts
+interface EnvIssue {
+    key: string;
+    message: string;
+    kind: "missing" | "invalid";
+}
+```
+
+#### JsonField
+
+```ts
+interface JsonField<T = unknown> extends BaseField<T> {
+    type: "json";
+    validate?: (value: unknown) => value is T;
+}
+```
+
+#### ListField
+
+```ts
+interface ListField extends BaseField<string[]> {
+    type: "list";
+    separator?: string;
+    minItems?: number;
+}
+```
+
+#### NumberField
+
+```ts
+interface NumberField extends BaseField<number> {
+    type: "number";
+    min?: number;
+    max?: number;
+    integer?: boolean;
+}
+```
+
+#### PortField
+
+```ts
+interface PortField extends BaseField<number> {
+    type: "port";
+}
+```
+
+#### StringField
+
+```ts
+interface StringField extends BaseField<string> {
+    type: "string";
+    minLength?: number;
+    maxLength?: number;
+    pattern?: RegExp;
+}
+```
+
+#### UrlField
+
+```ts
+interface UrlField extends BaseField<string> {
+    type: "url";
+    protocols?: readonly string[];
+}
+```
+
+#### ValidateEnvOptions
+
+```ts
+interface ValidateEnvOptions {
+    source?: Record<string, string | undefined>;
+    prefix?: string;
+    emptyIsUndefined?: boolean;
+    freeze?: boolean;
+}
+```
+
+#### EnvField
+
+```ts
+type EnvField = StringField | NumberField | PortField | BooleanField | UrlField | EnumField | ListField | JsonField | CustomField<unknown>;
+```
+
+#### EnvSchema
+
+A map of environment variable names to field definitions.
+
+```ts
+type EnvSchema = Record<string, EnvField>;
+```
+
+#### InferEnv
+
+The validated, typed environment object inferred from a schema.
+
+```ts
+type InferEnv<S extends EnvSchema> = {
+    readonly [K in RequiredKeys<S>]: FieldOutput<S[K]>;
+} & {
+    readonly [K in OptionalKeys<S>]?: FieldOutput<S[K]> | undefined;
+} extends infer O ? {
+    readonly [K in keyof O]: O[K];
+} : never;
+```
+
+#### SafeValidateResult
+
+```ts
+type SafeValidateResult<S extends EnvSchema> = {
+    success: true;
+    env: InferEnv<S>;
+    issues?: undefined;
+} | {
+    success: false;
+    env?: undefined;
+    issues: EnvIssue[];
+};
+```
+
+## @nexkitjs/errors
+
+Standardized application errors with error codes, HTTP status mapping, safe public messages, and serialization helpers.
+
+```bash
+npm install @nexkitjs/errors
+```
+
+### assert
+
+Asserts a condition, throwing the provided error (or a 400 `AppError` from a message) when it is falsy. Narrows types like `assert` from `node:assert`.
+
+```ts
+function assert(condition: unknown, errorOrMessage: AppError | string | (() => AppError)): asserts condition;
+```
+
+### codeToStatus
+
+Returns the status for a code; unknown custom codes default to 500.
+
+```ts
+function codeToStatus(code: ErrorCode): number;
+```
+
+### httpStatusText
+
+Returns the canonical reason phrase for a status (`404` → `"Not Found"`).
+
+```ts
+function httpStatusText(status: number): string;
+```
+
+### isAppError
+
+Returns true when `value` is an `AppError`.
+
+```ts
+function isAppError(value: unknown): value is AppError;
+```
+
+### isErrorStatus
+
+Returns true if `status` is a valid HTTP error status (400–599).
+
+```ts
+function isErrorStatus(status: unknown): status is number;
+```
+
+### normalizeError
+
+Converts *any* thrown value into an `AppError` so error handlers only ever deal with one shape. Recognizes:
+
+```ts
+function normalizeError(error: unknown, options: NormalizeErrorOptions = {}): AppError;
+```
+
+### serializeError
+
+Serializes any error (AppError or not) into a JSON-safe object suitable for logs. Cause chains are followed up to `maxCauseDepth`. Output is redacted.
+
+```ts
+function serializeError(error: unknown, options: SerializeOptions = {}): InternalErrorJSON | SerializedPlainError;
+```
+
+### statusToCode
+
+Returns the default code for a status; unknown statuses map by class (4xx → BAD_REQUEST, 5xx → INTERNAL_ERROR).
+
+```ts
+function statusToCode(status: number): BuiltinErrorCode;
+```
+
+### AppError
+
+Base class for all NexKit application errors.
+
+```ts
+class AppError extends Error {
+  readonly code: ErrorCode;
+  readonly status: number;
+  readonly expose: boolean;
+  readonly details: ErrorDetails | undefined;
+  readonly meta: Record<string, unknown> | undefined;
+  readonly headers: Readonly<Record<string, string>> | undefined;
+  override readonly cause: unknown;
+  readonly isOperational: boolean;
+  constructor(message: string, options: AppErrorOptions = {});
+  get publicMessage(): string;
+  withMeta(meta: Record<string, unknown>): this;
+  toPublicJSON(): PublicErrorJSON;
+  toJSON(): PublicErrorJSON;
+  toInternalJSON(options: SerializeOptions = {}): InternalErrorJSON;
+  static is(value: unknown): value is AppError;
+}
+```
+
+### BadGatewayError
+
+502 — upstream returned an invalid response.
+
+```ts
+class BadGatewayError extends AppError {
+  constructor(message: string = httpStatusText(502), options: HttpErrorOptions = {});
+}
+```
+
+### BadRequestError
+
+400 — malformed request syntax or invalid parameters.
+
+```ts
+class BadRequestError extends AppError {
+  constructor(message: string = httpStatusText(400), options: HttpErrorOptions = {});
+}
+```
+
+### ConflictError
+
+409 — state conflict (duplicate, version mismatch).
+
+```ts
+class ConflictError extends AppError {
+  constructor(message: string = httpStatusText(409), options: HttpErrorOptions = {});
+}
+```
+
+### ForbiddenError
+
+403 — authenticated but not permitted.
+
+```ts
+class ForbiddenError extends AppError {
+  constructor(message: string = httpStatusText(403), options: HttpErrorOptions = {});
+}
+```
+
+### GatewayTimeoutError
+
+504 — upstream timed out.
+
+```ts
+class GatewayTimeoutError extends AppError {
+  constructor(message: string = httpStatusText(504), options: HttpErrorOptions = {});
+}
+```
+
+### GoneError
+
+410 — resource permanently gone.
+
+```ts
+class GoneError extends AppError {
+  constructor(message: string = httpStatusText(410), options: HttpErrorOptions = {});
+}
+```
+
+### InternalError
+
+500 — unexpected failure. Message is never exposed by default.
+
+```ts
+class InternalError extends AppError {
+  constructor(message: string = httpStatusText(500), options: HttpErrorOptions = {});
+}
+```
+
+### MethodNotAllowedError
+
+405 — method not allowed on this resource.
+
+```ts
+class MethodNotAllowedError extends AppError {
+  constructor(message: string = httpStatusText(405), options: HttpErrorOptions = {});
+}
+```
+
+### NotFoundError
+
+404 — resource not found.
+
+```ts
+class NotFoundError extends AppError {
+  constructor(message: string = httpStatusText(404), options: HttpErrorOptions = {});
+}
+```
+
+### NotImplementedError
+
+501 — functionality not implemented.
+
+```ts
+class NotImplementedError extends AppError {
+  constructor(message: string = httpStatusText(501), options: HttpErrorOptions = {});
+}
+```
+
+### PayloadTooLargeError
+
+413 — request body exceeds configured limits.
+
+```ts
+class PayloadTooLargeError extends AppError {
+  constructor(message: string = httpStatusText(413), options: HttpErrorOptions = {});
+}
+```
+
+### RateLimitError
+
+429 — rate limit exceeded.
+
+```ts
+class TooManyRequestsError extends AppError {
+  readonly retryAfterSeconds: number | undefined;
+  readonly limit: number | undefined;
+  constructor(message = "Too Many Requests", options: TooManyRequestsOptions = {});
+}
+```
+
+### ServiceUnavailableError
+
+503 — temporarily unavailable (maintenance, overloaded, dependency down).
+
+```ts
+class ServiceUnavailableError extends AppError {
+  constructor(message: string = httpStatusText(503), options: HttpErrorOptions = {});
+}
+```
+
+### TooManyRequestsError
+
+429 — rate limit exceeded.
+
+```ts
+class TooManyRequestsError extends AppError {
+  readonly retryAfterSeconds: number | undefined;
+  readonly limit: number | undefined;
+  constructor(message = "Too Many Requests", options: TooManyRequestsOptions = {});
+}
+```
+
+### UnauthorizedError
+
+401 — missing or invalid authentication.
+
+```ts
+class UnauthorizedError extends AppError {
+  constructor(message: string = httpStatusText(401), options: HttpErrorOptions = {});
+}
+```
+
+### UnprocessableEntityError
+
+422 — semantically invalid request. Prefer `ValidationError` for field-level issues.
+
+```ts
+class UnprocessableEntityError extends AppError {
+  constructor(message: string = httpStatusText(422), options: HttpErrorOptions = {});
+}
+```
+
+### UnsupportedMediaTypeError
+
+415 — unsupported content type.
+
+```ts
+class UnsupportedMediaTypeError extends AppError {
+  constructor(message: string = httpStatusText(415), options: HttpErrorOptions = {});
+}
+```
+
+### ValidationError
+
+422 — request failed schema validation. Carries structured `issues` that are exposed to clients under `details.issues`.
+
+```ts
+class ValidationError extends AppError {
+  readonly issues: readonly ValidationErrorIssue[];
+  constructor(issues: ReadonlyArray<ValidationErrorIssue | ValidationIssue>, message = "Validation failed", options: Omit<HttpErrorOptions, "details"> = {});
+  static forField(path: string, message: string): ValidationError;
+}
+```
+
+### CODE_TO_STATUS
+
+Default HTTP status for each built-in code.
+
+```ts
+const CODE_TO_STATUS: Readonly<Record<BuiltinErrorCode, number>>;
+```
+
+### ErrorCodes
+
+Built-in error codes. Codes are stable, machine-readable identifiers that clients can branch on; HTTP statuses are a lossy projection of them.
+
+```ts
+const ErrorCodes: { readonly BAD_REQUEST: "BAD_REQUEST"; readonly VALIDATION_ERROR: "VALIDATION_ERROR"; readonly UNAUTHORIZED: "UNAUTHORIZED"; readonly FORBIDDEN: "FORBIDDEN"; readonly NOT_FOUND: "NOT_FOUND"; readonly METHOD_NOT_ALLOWED: "METHOD_NOT_ALLOWED"; readonly CONFLICT: "CONFLICT"; readonly GONE: "GONE"; readonly PAYLOAD_TOO_LARGE: "PAYLOAD_TOO_LARGE"; readonly UNSUPPORTED_MEDIA_TYPE: "UNSUPPORTED_MEDIA_TYPE"; readonly UNPROCESSABLE_ENTITY: "UNPROCESSABLE_ENTITY"; readonly RATE_LIMITED: "RATE_LIMITED"; readonly INTERNAL_ERROR: "INTERNAL_ERROR"; readonly NOT_IMPLEMENTED: "NOT_IMPLEMENTED"; readonly BAD_GATEWAY: "BAD_GATEWAY"; readonly SERVICE_UNAVAILABLE: "SERVICE_UNAVAILABLE"; readonly GATEWAY_TIMEOUT: "GATEWAY_TIMEOUT"; readonly CONFIG_INVALID: "CONFIG_INVALID"; readonly TIMEOUT: "TIMEOUT" };
+```
+
+### STATUS_TO_CODE
+
+Default code for an HTTP status (used when wrapping foreign errors).
+
+```ts
+const STATUS_TO_CODE: Readonly<Record<number, BuiltinErrorCode>>;
+```
+
+### Types (errors)
+
+#### AppErrorOptions
+
+```ts
+interface AppErrorOptions {
+    code?: ErrorCode;
+    status?: number;
+    publicMessage?: string;
+    expose?: boolean;
+    details?: ErrorDetails;
+    meta?: Record<string, unknown>;
+    cause?: unknown;
+    headers?: Record<string, string>;
+}
+```
+
+#### InternalErrorJSON
+
+Shape returned by `AppError.toInternalJSON`. For logs and diagnostics only.
+
+```ts
+interface InternalErrorJSON extends PublicErrorJSON {
+    name: string;
+    internalMessage: string;
+    expose: boolean;
+    stack?: string;
+    meta?: Record<string, unknown>;
+    cause?: unknown;
+}
+```
+
+#### NormalizeErrorOptions
+
+```ts
+interface NormalizeErrorOptions {
+    trustForeignStatus?: boolean;
+    fallbackMessage?: string;
+}
+```
+
+#### PublicErrorJSON
+
+Shape returned by `AppError.toPublicJSON`. Safe to send to clients.
+
+```ts
+interface PublicErrorJSON {
+    code: string;
+    message: string;
+    status: number;
+    details?: ErrorDetails;
+}
+```
+
+#### SerializeOptions
+
+```ts
+interface SerializeOptions {
+    includeStack?: boolean;
+    redact?: RedactOptions | false;
+    maxCauseDepth?: number;
+}
+```
+
+#### TooManyRequestsOptions
+
+```ts
+interface TooManyRequestsOptions extends HttpErrorOptions {
+    retryAfterSeconds?: number;
+    limit?: number;
+}
+```
+
+#### ValidationErrorIssue
+
+A single public-facing validation issue.
+
+```ts
+interface ValidationErrorIssue {
+    path: string;
+    message: string;
+}
+```
+
+#### BuiltinErrorCode
+
+```ts
+type BuiltinErrorCode = (typeof ErrorCodes)[keyof typeof ErrorCodes];
+```
+
+#### ErrorCode
+
+Any error code: a built-in one, or a custom `UPPER_SNAKE_CASE` string of your own. The `(string & {})` trick keeps autocompletion for built-ins.
+
+```ts
+type ErrorCode = BuiltinErrorCode | (string & {});
+```
+
+#### ErrorDetails
+
+Public-safe details attached to an error (e.g. validation issues).
+
+```ts
+type ErrorDetails = Record<string, JsonValue> | JsonValue[];
+```
+
+## @nexkitjs/logger
+
+Structured JSON logger with levels, child loggers, request correlation, error serialization, and secret redaction.
+
+```bash
+npm install @nexkitjs/logger
+```
+
+### callbackTransport
+
+Transport that forwards entries to a callback.
+
+```ts
+function callbackTransport(fn: (entry: LogEntry) => void): LogTransport;
+```
+
+### createLogger
+
+Creates a structured logger.
+
+```ts
+function createLogger(options: LoggerOptions = {}): Logger;
+```
+
+### createNoopLogger
+
+A logger that discards everything. Handy as a default parameter.
+
+```ts
+function createNoopLogger(): Logger;
+```
+
+### jsonTransport
+
+Newline-delimited JSON transport. The default destination is `process.stdout`.
+
+```ts
+function jsonTransport(stream: WritableLike = process.stdout): LogTransport;
+```
+
+### memoryTransport
+
+```ts
+function memoryTransport(): MemoryTransport;
+```
+
+### multiTransport
+
+Fan out to multiple transports. A failing transport never affects the others.
+
+```ts
+function multiTransport(transports: readonly LogTransport[]): LogTransport;
+```
+
+### prettyTransport
+
+Human-friendly transport for local development. Not intended for production (use `jsonTransport` and let your log pipeline do the pretty-printing).
+
+```ts
+function prettyTransport(options: PrettyTransportOptions = {}): LogTransport;
+```
+
+### serializeErrorForLog
+
+Serializes an error for logging. Honors `toInternalJSON()` (NexKit AppError) and plain `Error` cause chains without depending on `@nexkitjs/errors`.
+
+```ts
+function serializeErrorForLog(error: unknown, includeStack = true, depth = 0): unknown;
+```
+
+### stringifyEntry
+
+Safe JSON serialization: handles BigInt and circular references.
+
+```ts
+function stringifyEntry(entry: LogEntry): string;
+```
+
+### LOG_LEVELS
+
+```ts
+const LOG_LEVELS: { readonly trace: 10; readonly debug: 20; readonly info: 30; readonly warn: 40; readonly error: 50; readonly fatal: 60; readonly silent: number };
+```
+
+### Types (logger)
+
+#### LogEntry
+
+A single structured log record, after redaction and context enrichment.
+
+```ts
+interface LogEntry {
+    level: EmittableLevel;
+    levelValue: number;
+    time: string;
+    msg: string;
+    name?: string;
+    requestId?: string;
+    correlationId?: string;
+    err?: unknown;
+    [key: string]: unknown;
+}
+```
+
+#### Logger
+
+```ts
+interface Logger {
+    readonly level: LogLevel;
+    readonly bindings: Readonly<LogFields>;
+    trace: LogMethod;
+    debug: LogMethod;
+    info: LogMethod;
+    warn: LogMethod;
+    error: LogMethod;
+    fatal: LogMethod;
+    child(bindings: LogFields): Logger;
+    setLevel(level: LogLevel): void;
+    isLevelEnabled(level: LogLevel): boolean;
+    flush(): Promise<void>;
+}
+```
+
+#### LoggerOptions
+
+```ts
+interface LoggerOptions {
+    level?: LogLevel;
+    name?: string;
+    base?: LogFields;
+    transport?: LogTransport | readonly LogTransport[] | "json" | "pretty";
+    redact?: RedactOptions | false;
+    includeContext?: boolean;
+    timestamp?: () => string;
+    errorKey?: string;
+    includeStack?: boolean;
+    onTransportError?: (error: unknown) => void;
+}
+```
+
+#### LogMethod
+
+```ts
+interface LogMethod {
+    (message: string, fields?: LogFields): void;
+    (fields: LogFields, message?: string): void;
+    (error: Error, message?: string): void;
+}
+```
+
+#### LogTransport
+
+Destination for log entries.
+
+```ts
+interface LogTransport {
+    write(entry: LogEntry): void;
+    flush?(): Promise<void> | void;
+}
+```
+
+#### MemoryTransport
+
+In-memory transport. Useful for tests and for buffering during startup.
+
+```ts
+interface MemoryTransport extends LogTransport {
+    readonly entries: LogEntry[];
+    clear(): void;
+}
+```
+
+#### PrettyTransportOptions
+
+```ts
+interface PrettyTransportOptions {
+    stream?: WritableLike;
+    colors?: boolean;
+}
+```
+
+#### EmittableLevel
+
+```ts
+type EmittableLevel = Exclude<LogLevel, "silent">;
+```
+
+#### LogFields
+
+Fields accepted by every log method.
+
+```ts
+type LogFields = Record<string, unknown>;
+```
+
+#### LogLevel
+
+```ts
+type LogLevel = keyof typeof LOG_LEVELS;
+```
+
+#### WritableLike
+
+Minimal writable interface (works with `process.stdout`, files, sockets, test sinks).
+
+```ts
+type WritableLike = Pick<Writable, "write">;
+```
+
+## @nexkitjs/health
+
+Liveness and readiness checks with timeouts, custom check registration, and sanitized reports.
+
+```bash
+npm install @nexkitjs/health
+```
+
+### createHealthRegistry
+
+Creates a health-check registry.
+
+```ts
+function createHealthRegistry(options: HealthRegistryOptions = {}): HealthRegistry;
+```
+
+### eventLoopLagCheck
+
+Built-in check: measures event-loop lag; `degraded` above `warnMs`, `fail` above `failMs`.
+
+```ts
+function eventLoopLagCheck(opts: {
+    warnMs?: number;
+    failMs?: number;
+} = {}): HealthCheckFn;
+```
+
+### healthStatusCode
+
+Maps a report to an HTTP status: `ok`/`degraded` → 200, `fail` → 503.
+
+```ts
+function healthStatusCode(report: Pick<HealthReport, "status">): number;
+```
+
+### memoryHeapCheck
+
+Built-in check: fails when heap usage exceeds `maxHeapUsedBytes`.
+
+```ts
+function memoryHeapCheck(maxHeapUsedBytes: number): HealthCheckFn;
+```
+
+### Types (health)
+
+#### CheckReport
+
+```ts
+interface CheckReport {
+    status: HealthStatus;
+    durationMs: number;
+    critical: boolean;
+    message?: string;
+    details?: Record<string, JsonValue>;
+    tags?: readonly string[];
+}
+```
+
+#### HealthCheckOptions
+
+```ts
+interface HealthCheckOptions {
+    timeoutMs?: number;
+    critical?: boolean;
+    probe?: HealthProbe;
+    tags?: readonly string[];
+}
+```
+
+#### HealthCheckResult
+
+What a check may return. `void`/`true` mean ok; `false` means fail.
+
+```ts
+interface HealthCheckResult {
+    status: HealthStatus;
+    message?: string;
+    details?: Record<string, JsonValue>;
+}
+```
+
+#### HealthRegistry
+
+```ts
+interface HealthRegistry {
+    register(name: string, fn: HealthCheckFn, options?: HealthCheckOptions): () => void;
+    unregister(name: string): boolean;
+    list(): string[];
+    liveness(): Promise<HealthReport>;
+    readiness(): Promise<HealthReport>;
+    run(name: string): Promise<CheckReport>;
+}
+```
+
+#### HealthRegistryOptions
+
+```ts
+interface HealthRegistryOptions {
+    defaultTimeoutMs?: number;
+    exposeErrorMessages?: boolean;
+    info?: Record<string, JsonValue>;
+    now?: () => number;
+}
+```
+
+#### HealthReport
+
+```ts
+interface HealthReport {
+    status: HealthStatus;
+    probe: "liveness" | "readiness";
+    timestamp: string;
+    uptime: number;
+    info?: Record<string, JsonValue>;
+    checks: Record<string, CheckReport>;
+}
+```
+
+#### HealthCheckFn
+
+```ts
+type HealthCheckFn = (signal: AbortSignal) => MaybePromise<void | boolean | HealthCheckResult>;
+```
+
+#### HealthProbe
+
+```ts
+type HealthProbe = "liveness" | "readiness" | "both";
+```
+
+#### HealthStatus
+
+```ts
+type HealthStatus = "ok" | "degraded" | "fail";
+```
+
+## @nexkitjs/response
+
+Consistent API response envelopes, pagination metadata, and validation-error formatting with strong types.
+
+```bash
+npm install @nexkitjs/response
+```
+
+### buildPaginationMeta
+
+Computes offset-pagination metadata.
+
+```ts
+function buildPaginationMeta(input: {
+    page: number;
+    pageSize: number;
+    total: number;
+}): PaginationMeta;
+```
+
+### cursorPaginated
+
+Wraps a page of items with cursor-pagination metadata.
+
+```ts
+function cursorPaginated<T>(items: readonly T[], pagination: {
+    pageSize: number;
+    nextCursor: string | null;
+}, options?: EnvelopeOptions): CursorPaginatedResponse<T>;
+```
+
+### errorBody
+
+Builds a client-safe error envelope from *any* thrown value. Internal messages of 5xx errors are never exposed.
+
+```ts
+function errorBody(error: unknown, options: ErrorBodyOptions = {}): ApiFailure;
+```
+
+### formatValidationIssues
+
+Converts validation issues to the `{ field, message }` shape used in docs and UIs.
+
+```ts
+function formatValidationIssues(issues: ReadonlyArray<ValidationIssue | {
+    path: string;
+    message: string;
+}>): FormattedValidationIssue[];
+```
+
+### isApiSuccess
+
+Type guard for success envelopes.
+
+```ts
+function isApiSuccess<T, M>(value: ApiResponse<T, M>): value is ApiSuccess<T, M>;
+```
+
+### ok
+
+Wraps data in a success envelope.
+
+```ts
+function ok<T>(data: T, options?: EnvelopeOptions): ApiSuccess<T>;
+function ok<T, M>(data: T, meta: M, options?: EnvelopeOptions): ApiSuccess<T, M>;
+```
+
+### paginated
+
+Wraps a page of items with offset-pagination metadata.
+
+```ts
+function paginated<T>(items: readonly T[], pagination: {
+    page: number;
+    pageSize: number;
+    total: number;
+}, options?: EnvelopeOptions): PaginatedResponse<T>;
+```
+
+### parsePagination
+
+Parses and validates `page`/`pageSize` from a query object. Throws a `ValidationError` (422) on invalid input.
+
+```ts
+function parsePagination(query: Record<string, unknown>, options: ParsePaginationOptions = {}): ParsedPagination;
+```
+
+### created
+
+Alias of `ok` for 201 responses — the body shape is identical; set the status in your framework.
+
+```ts
+const created: { <T>(data: T, options?: EnvelopeOptions): ApiSuccess<T>; <T, M>(data: T, meta: M, options?: EnvelopeOptions): ApiSuccess<T, M> };
+```
+
+### Types (response)
+
+#### ApiErrorObject
+
+Error payload inside an `ApiFailure`.
+
+```ts
+interface ApiErrorObject {
+    code: string;
+    message: string;
+    status: number;
+    details?: ErrorDetails;
+}
+```
+
+#### ApiFailure
+
+Error response envelope.
+
+```ts
+interface ApiFailure {
+    success: false;
+    error: ApiErrorObject;
+    requestId?: string;
+}
+```
+
+#### ApiSuccess
+
+Successful response envelope.
+
+```ts
+interface ApiSuccess<T, M = undefined> {
+    success: true;
+    data: T;
+    meta?: M;
+    requestId?: string;
+}
+```
+
+#### CursorPaginationMeta
+
+Cursor-based pagination metadata.
+
+```ts
+interface CursorPaginationMeta {
+    pageSize: number;
+    nextCursor: string | null;
+    hasMore: boolean;
+}
+```
+
+#### EnvelopeOptions
+
+```ts
+interface EnvelopeOptions {
+    requestId?: string | undefined;
+}
+```
+
+#### ErrorBodyOptions
+
+```ts
+interface ErrorBodyOptions extends EnvelopeOptions, NormalizeErrorOptions {
+}
+```
+
+#### FormattedValidationIssue
+
+Public shape of a single validation issue in responses.
+
+```ts
+interface FormattedValidationIssue {
+    field: string;
+    message: string;
+}
+```
+
+#### PaginationMeta
+
+Offset-based pagination metadata.
+
+```ts
+interface PaginationMeta {
+    page: number;
+    pageSize: number;
+    total: number;
+    totalPages: number;
+    hasNext: boolean;
+    hasPrev: boolean;
+}
+```
+
+#### ParsedPagination
+
+```ts
+interface ParsedPagination {
+    page: number;
+    pageSize: number;
+    offset: number;
+    limit: number;
+}
+```
+
+#### ParsePaginationOptions
+
+```ts
+interface ParsePaginationOptions {
+    defaultPageSize?: number;
+    maxPageSize?: number;
+    clamp?: boolean;
+    pageParam?: string;
+    pageSizeParam?: string;
+}
+```
+
+#### ApiResponse
+
+```ts
+type ApiResponse<T, M = undefined> = ApiSuccess<T, M> | ApiFailure;
+```
+
+#### CursorPaginatedResponse
+
+```ts
+type CursorPaginatedResponse<T> = ApiSuccess<T[], CursorPaginationMeta>;
+```
+
+#### ErrorDetails
+
+Public-safe details attached to an error (e.g. validation issues).
+
+```ts
+type ErrorDetails = Record<string, JsonValue> | JsonValue[];
+```
+
+#### JsonValue
+
+JSON-compatible value.
+
+```ts
+type JsonValue = JsonPrimitive | JsonValue[] | {
+    [key: string]: JsonValue;
+};
+```
+
+#### PaginatedResponse
+
+```ts
+type PaginatedResponse<T> = ApiSuccess<T[], PaginationMeta>;
+```
+
+## @nexkitjs/ratelimit
+
+Rate-limiting adapter interfaces and helpers for integrating established rate limiters into NexKit adapters.
+
+```bash
+npm install @nexkitjs/ratelimit
+```
+
+### adaptRateLimiterFlexible
+
+Wraps any `rate-limiter-flexible` limiter (Memory, Redis, Mongo, Postgres, Cluster…) so it can be used with NexKit's framework adapters.
+
+```ts
+function adaptRateLimiterFlexible(limiter: RateLimiterFlexibleLike, options: {
+    now?: () => number;
+} = {}): RateLimiter;
+```
+
+### createFixedWindowLimiter
+
+Fixed-window limiter on top of any atomic `RateLimitStore`. Correctness across instances depends entirely on the store's atomicity.
+
+```ts
+function createFixedWindowLimiter(options: FixedWindowOptions): RateLimiter;
+```
+
+### createRedisStore
+
+Redis store for `createFixedWindowLimiter`. Uses a Lua script for atomicity when `eval` is available, otherwise falls back to `INCRBY` + `PEXPIRE` (a narrow race on the first hit of a window — acceptable for most APIs, but prefer a client that supports `eval`).
+
+```ts
+function createRedisStore(client: RedisLikeClient, options: {
+    now?: () => number;
+} = {}): RateLimitStore;
+```
+
+### rateLimitError
+
+Creates the standard 429 error for a denied decision.
+
+```ts
+function rateLimitError(decision: RateLimitDecision, message = "Too many requests"): TooManyRequestsError;
+```
+
+### rateLimitHeaders
+
+Builds response headers describing a decision. Header names are lower-case.
+
+```ts
+function rateLimitHeaders(decision: RateLimitDecision, options: RateLimitHeadersOptions = {}): Record<string, string>;
+```
+
+### MemoryRateLimitStore
+
+**Single-process, in-memory** store.
+
+```ts
+class MemoryRateLimitStore implements RateLimitStore {
+  constructor(options: MemoryStoreOptions = {});
+  async increment(key: string, windowMs: number, cost: number): Promise<{
+    count: number;
+    resetAt: number;
+}>;
+  async reset(key: string): Promise<void>;
+  purge(): void;
+  get size(): number;
+  dispose(): void;
+}
+```
+
+### noopRateLimiter
+
+A limiter that always allows. Useful to disable limiting in tests.
+
+```ts
+const noopRateLimiter: RateLimiter;
+```
+
+### Types (ratelimit)
+
+#### FixedWindowOptions
+
+```ts
+interface FixedWindowOptions {
+    store: RateLimitStore;
+    limit: number;
+    windowMs: number;
+    keyPrefix?: string;
+    now?: () => number;
+}
+```
+
+#### MemoryStoreOptions
+
+```ts
+interface MemoryStoreOptions {
+    cleanupIntervalMs?: number;
+    now?: () => number;
+}
+```
+
+#### RateLimitDecision
+
+Outcome of consuming from a rate limit.
+
+```ts
+interface RateLimitDecision {
+    allowed: boolean;
+    limit: number;
+    remaining: number;
+    resetAt: number;
+    retryAfterMs: number;
+}
+```
+
+#### RateLimiter
+
+The contract consumed by `@nexkitjs/express` and `@nexkitjs/fastify`. Implement it directly or use one of the adapters below.
+
+```ts
+interface RateLimiter {
+    consume(key: string, cost?: number): Promise<RateLimitDecision>;
+    reset?(key: string): Promise<void>;
+}
+```
+
+#### RateLimiterFlexibleLike
+
+Structural subset of a `rate-limiter-flexible` limiter instance.
+
+```ts
+interface RateLimiterFlexibleLike {
+    points: number;
+    consume(key: string | number, pointsToConsume?: number): Promise<RateLimiterFlexibleRes>;
+    delete?(key: string | number): Promise<boolean>;
+}
+```
+
+#### RateLimiterFlexibleRes
+
+Structural subset of a `rate-limiter-flexible` result (`RateLimiterRes`).
+
+```ts
+interface RateLimiterFlexibleRes {
+    remainingPoints: number;
+    msBeforeNext: number;
+    consumedPoints: number;
+    isFirstInDuration?: boolean;
+}
+```
+
+#### RateLimitHeadersOptions
+
+```ts
+interface RateLimitHeadersOptions {
+    style?: "standard" | "legacy" | "both";
+}
+```
+
+#### RateLimitStore
+
+Storage contract for `createFixedWindowLimiter`. Implementations must be atomic per key (Redis `INCR` + `PEXPIRE`, a database row with `UPDATE ... RETURNING`, etc.) to be correct across multiple instances.
+
+```ts
+interface RateLimitStore {
+    increment(key: string, windowMs: number, cost: number): Promise<{
+        count: number;
+        resetAt: number;
+    }>;
+    reset(key: string): Promise<void>;
+}
+```
+
+#### RedisLikeClient
+
+Minimal Redis client surface (matches `ioredis`). For `node-redis` pass a small wrapper mapping `incrBy`/`pExpire`/`pTTL`/`eval`.
+
+```ts
+interface RedisLikeClient {
+    eval?(script: string, numKeys: number, ...args: Array<string | number>): Promise<unknown>;
+    incrby(key: string, increment: number): Promise<number>;
+    pexpire(key: string, milliseconds: number): Promise<unknown>;
+    pttl(key: string): Promise<number>;
+    del(key: string): Promise<unknown>;
+}
+```
+
+## @nexkitjs/express
+
+Express middleware for NexKit: request IDs, timing, structured logging, secure headers, error handling, health routes, validation, and rate limiting.
+
+```bash
+npm install @nexkitjs/express
+```
+
+### asyncHandler
+
+Wraps an async handler so rejections reach `next()`. Express 5 does this natively; keep it for Express 4 compatibility.
+
+```ts
+function asyncHandler<Req extends Request = Request, Res extends Response = Response>(fn: (req: Req, res: Res, next: NextFunction) => Promise<unknown>): RequestHandler;
+```
+
+### errorHandler
+
+Express error-handling middleware. Normalizes anything thrown into an `AppError`, logs it (without leaking to the client), sets any headers the error carries (e.g. `Retry-After`), and responds with a consistent JSON body.
+
+```ts
+function errorHandler(options: ErrorHandlerOptions = {}): ErrorRequestHandler;
+```
+
+### getValidated
+
+Helper to read validated parts with proper typing.
+
+```ts
+function getValidated<B = unknown, Q = unknown, P = unknown, H = unknown>(req: Request): ValidatedRequestParts<B, Q, P, H>;
+```
+
+### healthRoutes
+
+Returns a Router exposing liveness and readiness endpoints for a registry.
+
+```ts
+function healthRoutes(registry: HealthRegistry, options: HealthRoutesOptions = {}): Router;
+```
+
+### notFoundHandler
+
+Converts unmatched routes into a 404 `NotFoundError`. Mount after your routes, before `errorHandler`.
+
+```ts
+function notFoundHandler(message = "Route not found"): RequestHandler;
+```
+
+### rateLimit
+
+Rate-limits requests using any `RateLimiter` from `@nexkitjs/ratelimit`.
+
+```ts
+function rateLimit(options: RateLimitMiddlewareOptions): RequestHandler;
+```
+
+### requestContext
+
+Express middleware that assigns request/correlation ids, records timing, runs the rest of the chain inside a NexKit request context (so loggers pick up `requestId` automatically) and emits one structured log per request.
+
+```ts
+function requestContext(options: RequestContextOptions = {}): RequestHandler;
+```
+
+### requestSizeLimit
+
+Rejects requests whose declared `Content-Length` exceeds `maxBytes` with 413 *before* the body is read. Complements (does not replace) the `limit` option of `express.json()` / `express.urlencoded()`, which also guards chunked bodies.
+
+```ts
+function requestSizeLimit(options: RequestSizeLimitOptions = {}): RequestHandler;
+```
+
+### secureHeaders
+
+Sets secure response headers (strict API defaults) and removes `X-Powered-By`. See `secureHeaders` in `@nexkitjs/core` for options.
+
+```ts
+function secureHeaders(options: SecureHeadersOptions = {}): RequestHandler;
+```
+
+### validateRequest
+
+Validates `body`, `query`, `params` and/or `headers` against Standard Schema validators (Zod, Valibot, ArkType…). Parsed output is stored on `req.validated`; `req.body` is replaced with the parsed body. Failures become a 422 `ValidationError` passed to `next()`.
+
+```ts
+function validateRequest<B extends StandardSchemaV1 | undefined = undefined, Q extends StandardSchemaV1 | undefined = undefined, P extends StandardSchemaV1 | undefined = undefined, H extends StandardSchemaV1 | undefined = undefined>(schemas: ValidateRequestSchemas<B, Q, P, H>): RequestHandler;
+```
+
+### Types (express)
+
+#### ErrorHandlerOptions
+
+```ts
+interface ErrorHandlerOptions extends NormalizeErrorOptions {
+    logger?: Logger;
+    logClientErrors?: boolean;
+    includeRequestId?: boolean;
+    onError?: (error: AppError, req: Request, res: Response) => void;
+    formatBody?: (error: AppError, req: Request) => unknown;
+}
+```
+
+#### HealthRoutesOptions
+
+```ts
+interface HealthRoutesOptions {
+    livenessPath?: string;
+    readinessPath?: string;
+    noCache?: boolean;
+}
+```
+
+#### RateLimitMiddlewareOptions
+
+```ts
+interface RateLimitMiddlewareOptions extends RateLimitHeadersOptions {
+    limiter: RateLimiter;
+    keyGenerator?: (req: Request) => string | Promise<string>;
+    cost?: number | ((req: Request) => number);
+    skip?: (req: Request) => boolean | Promise<boolean>;
+    headers?: boolean;
+    onLimit?: (req: Request, res: Response, next: NextFunction) => void;
+    onStoreError?: "allow" | "deny";
+}
+```
+
+#### RequestContextOptions
+
+```ts
+interface RequestContextOptions {
+    logger?: Logger;
+    requestIdHeader?: string;
+    correlationIdHeader?: string;
+    trustIncomingRequestId?: boolean;
+    setResponseHeaders?: boolean;
+    ignore?: readonly string[] | ((req: Request) => boolean);
+    metadata?: (req: Request, res: Response) => Record<string, unknown>;
+    logHeaders?: boolean;
+    logQuery?: boolean;
+    level?: (req: Request, res: Response) => EmittableLevel;
+    redact?: RedactOptions;
+    message?: string;
+}
+```
+
+#### RequestSizeLimitOptions
+
+```ts
+interface RequestSizeLimitOptions {
+    maxBytes?: string | number;
+}
+```
+
+#### ValidatedRequestParts
+
+Parsed and validated request parts, populated by `validateRequest`.
+
+```ts
+interface ValidatedRequestParts<B = unknown, Q = unknown, P = unknown, H = unknown> {
+    body: B;
+    query: Q;
+    params: P;
+    headers: H;
+}
+```
+
+#### ValidateRequestSchemas
+
+```ts
+interface ValidateRequestSchemas<B extends StandardSchemaV1 | undefined = undefined, Q extends StandardSchemaV1 | undefined = undefined, P extends StandardSchemaV1 | undefined = undefined, H extends StandardSchemaV1 | undefined = undefined> {
+    body?: B;
+    query?: Q;
+    params?: P;
+    headers?: H;
+}
+```
+
+## @nexkitjs/fastify
+
+Fastify plugin for NexKit: request IDs, timing, structured logging, secure headers, error handling, health routes, validation, and rate limiting.
+
+```bash
+npm install @nexkitjs/fastify
+```
+
+### getValidated
+
+Reads validated parts with proper typing.
+
+```ts
+function getValidated<B = unknown, Q = unknown, P = unknown, H = unknown>(req: FastifyRequest): ValidatedRequestParts<B, Q, P, H>;
+```
+
+### rateLimitHook
+
+Builds a Fastify `onRequest`/`preHandler` hook that enforces a NexKit rate limiter.
+
+```ts
+function rateLimitHook(options: RateLimitPluginOptions);
+```
+
+### requestIdGenerator
+
+Returns a `genReqId` function for the Fastify factory that trusts a validated incoming header and otherwise generates a UUID.
+
+```ts
+function requestIdGenerator(options: {
+    header?: string;
+    trustIncoming?: boolean;
+} = {});
+```
+
+### validateRequest
+
+`preHandler` hook validating request parts with Standard Schema validators. Prefer Fastify's native JSON-schema validation when possible; use this when you want to share Zod/Valibot schemas with the rest of your codebase.
+
+```ts
+function validateRequest(schemas: ValidateRequestSchemas): preHandlerAsyncHookHandler;
+```
+
+### default
+
+The NexKit Fastify plugin. It is registered without encapsulation (`skip-override`) so hooks and handlers apply to the whole instance.
+
+```ts
+export default nexkit; // alias of nexkit
+```
+
+### nexkit
+
+The NexKit Fastify plugin. It is registered without encapsulation (`skip-override`) so hooks and handlers apply to the whole instance.
+
+```ts
+const nexkit: FastifyPluginAsync<NexkitPluginOptions>;
+```
+
+### Types (fastify)
+
+#### ErrorHandlerPluginOptions
+
+```ts
+interface ErrorHandlerPluginOptions extends NormalizeErrorOptions {
+    logClientErrors?: boolean;
+    includeRequestId?: boolean;
+    onError?: (error: AppError, req: FastifyRequest, reply: FastifyReply) => void;
+    formatBody?: (error: AppError, req: FastifyRequest) => unknown;
+}
+```
+
+#### HealthPluginOptions
+
+```ts
+interface HealthPluginOptions {
+    registry: HealthRegistry;
+    livenessPath?: string;
+    readinessPath?: string;
+}
+```
+
+#### NexkitPluginOptions
+
+```ts
+interface NexkitPluginOptions {
+    logger?: Logger;
+    requestContext?: RequestContextPluginOptions | false;
+    secureHeaders?: SecureHeadersOptions | false;
+    health?: HealthRegistry | HealthPluginOptions;
+    rateLimit?: RateLimitPluginOptions;
+    errorHandler?: ErrorHandlerPluginOptions | false;
+    notFoundHandler?: boolean;
+}
+```
+
+#### RateLimitPluginOptions
+
+```ts
+interface RateLimitPluginOptions extends RateLimitHeadersOptions {
+    limiter: RateLimiter;
+    keyGenerator?: (req: FastifyRequest) => string | Promise<string>;
+    cost?: number | ((req: FastifyRequest) => number);
+    skip?: (req: FastifyRequest) => boolean | Promise<boolean>;
+    headers?: boolean;
+    onStoreError?: "allow" | "deny";
+}
+```
+
+#### RequestContextPluginOptions
+
+```ts
+interface RequestContextPluginOptions {
+    requestIdHeader?: string;
+    correlationIdHeader?: string;
+    trustIncomingRequestId?: boolean;
+    setResponseHeaders?: boolean;
+    ignore?: readonly string[] | ((req: FastifyRequest) => boolean);
+    metadata?: (req: FastifyRequest, reply: FastifyReply) => Record<string, unknown>;
+    logHeaders?: boolean;
+    logQuery?: boolean;
+    level?: (req: FastifyRequest, reply: FastifyReply) => EmittableLevel;
+    redact?: RedactOptions;
+    message?: string;
+}
+```
+
+#### ValidatedRequestParts
+
+```ts
+interface ValidatedRequestParts<B = unknown, Q = unknown, P = unknown, H = unknown> {
+    body: B;
+    query: Q;
+    params: P;
+    headers: H;
+}
+```
+
+#### ValidateRequestSchemas
+
+```ts
+interface ValidateRequestSchemas {
+    body?: StandardSchemaV1;
+    query?: StandardSchemaV1;
+    params?: StandardSchemaV1;
+    headers?: StandardSchemaV1;
+}
+```
+
+## @nexkitjs/testing
+
+Test utilities for applications built with NexKit: log capture, env fixtures, error assertions.
+
+```bash
+npm install @nexkitjs/testing
+```
+
+### createManualClock
+
+A deterministic clock for time-dependent code (rate limiters, caches).
+
+```ts
+function createManualClock(start = 1700000000000): ManualClock;
+```
+
+### createTestLogger
+
+Creates a logger that captures entries in memory (level `trace`, fixed timestamp).
+
+```ts
+function createTestLogger(options: Omit<LoggerOptions, "transport"> = {}): TestLogger;
+```
+
+### createTestRateLimiter
+
+A single-process limiter wired to a manual clock, for deterministic rate-limit tests.
+
+```ts
+function createTestRateLimiter(options: {
+    limit: number;
+    windowMs: number;
+}): TestRateLimiter;
+```
+
+### expectAppError
+
+Asserts that `value` is an `AppError` matching the expectation and returns it typed.
+
+```ts
+function expectAppError(value: unknown, expectation: AppErrorExpectation = {}): AppError;
+```
+
+### healthCheckStub
+
+Creates a health check that resolves/rejects after `delayMs` with the given outcome.
+
+```ts
+function healthCheckStub(options: {
+    status?: "ok" | "degraded" | "fail";
+    delayMs?: number;
+    throws?: boolean;
+} = {});
+```
+
+### rejected
+
+Runs `fn` and returns the thrown value (or rejection reason). Throws if nothing was thrown.
+
+```ts
+async function rejected(fn: () => unknown): Promise<unknown>;
+```
+
+### runInTestContext
+
+Runs `fn` inside a request context (defaults to `requestId: "test-request-id"`).
+
+```ts
+function runInTestContext<T>(fn: () => T, init: Partial<RequestContext> = {}): T;
+```
+
+### withEnv
+
+Temporarily overrides `process.env` for the duration of `fn` (sync or async), then restores the previous values. `undefined` deletes a variable.
+
+```ts
+async function withEnv<T>(overrides: Record<string, string | undefined>, fn: () => T | Promise<T>): Promise<T>;
+```
+
+### AppErrorAssertionError
+
+Thrown by `expectAppError` on mismatch.
+
+```ts
+class AppErrorAssertionError extends Error {
+  constructor(message: string, readonly actual: unknown);
+}
+```
+
+### Types (testing)
+
+#### AppErrorExpectation
+
+```ts
+interface AppErrorExpectation {
+    code?: ErrorCode;
+    status?: number;
+    message?: string | RegExp;
+    publicMessage?: string | RegExp;
+    instanceOf?: abstract new (...args: never[]) => unknown;
+}
+```
+
+#### ManualClock
+
+```ts
+interface ManualClock {
+    now(this: void): number;
+    advance(this: void, ms: number): void;
+    set(this: void, epochMs: number): void;
+}
+```
+
+#### TestLogger
+
+```ts
+interface TestLogger {
+    logger: Logger;
+    entries: LogEntry[];
+    at(level: LogLevel): LogEntry[];
+    find(text: string | RegExp): LogEntry | undefined;
+    contains(text: string): boolean;
+    clear(): void;
+}
+```
+
+#### TestRateLimiter
+
+```ts
+interface TestRateLimiter {
+    limiter: RateLimiter;
+    clock: ManualClock;
+    store: MemoryRateLimitStore;
+    dispose(): void;
+}
+```
+
+## @nexkitjs/cli
+
+NexKit CLI: scaffold config, generate middleware, and diagnose your project setup.
+
+```bash
+npm install @nexkitjs/cli
+```
+
+### defaultIO
+
+```ts
+function defaultIO(): CliIO;
+```
+
+### detectPackageManager
+
+```ts
+function detectPackageManager(cwd: string): PackageManager;
+```
+
+### doctor
+
+```ts
+function doctor(io: CliIO): CommandResult;
+```
+
+### generate
+
+```ts
+function generate(io: CliIO, argv: string[]): CommandResult;
+```
+
+### inferEnvFields
+
+Infers an env schema from `.env`-style content (`KEY=value` lines). Secret-looking keys never receive defaults.
+
+```ts
+function inferEnvFields(dotenv: string): EnvFieldSpec[];
+```
+
+### init
+
+```ts
+function init(io: CliIO, argv: string[]): CommandResult;
+```
+
+### installCommand
+
+```ts
+function installCommand(pm: PackageManager, packages: string[], dev = false): string;
+```
+
+### renderEnvConfig
+
+Renders `src/config/env.ts`.
+
+```ts
+function renderEnvConfig(fields: EnvFieldSpec[] = DEFAULT_ENV_FIELDS): string;
+```
+
+### renderEnvExample
+
+Renders a `.env.example` from field specs.
+
+```ts
+function renderEnvExample(fields: EnvFieldSpec[] = DEFAULT_ENV_FIELDS): string;
+```
+
+### renderMiddleware
+
+Renders `src/nexkit.ts` for Express or Fastify.
+
+```ts
+function renderMiddleware(options: MiddlewareTemplateOptions): string;
+```
+
+### requiredPackages
+
+Packages required by the generated files.
+
+```ts
+function requiredPackages(framework: Framework, options: {
+    health?: boolean;
+    rateLimit?: boolean;
+} = {}): string[];
+```
+
+### run
+
+Runs the CLI with the given arguments. Returns the process exit code.
+
+```ts
+async function run(argv: string[], io: CliIO = defaultIO()): Promise<number>;
+```
+
+### runDoctorChecks
+
+```ts
+function runDoctorChecks(io: CliIO, nodeVersion = process.version): DoctorCheck[];
+```
+
+### writeGenerated
+
+Writes a file unless it exists (and `force` is false). Creates parent directories.
+
+```ts
+function writeGenerated(io: CliIO, relPath: string, content: string, options: {
+    force?: boolean;
+    dryRun?: boolean;
+} = {}): WriteResult;
+```
+
+### UsageError
+
+```ts
+class UsageError extends Error {
+
+}
+```
+
+### DEFAULT_ENV_FIELDS
+
+Default schema used by `nexkit init` and `nexkit generate config` without a source file.
+
+```ts
+const DEFAULT_ENV_FIELDS: EnvFieldSpec[];
+```
+
+### HELP
+
+```ts
+const HELP: "nexkit — Build Better Backends With Less Boilerplate.\n\nUsage:\n  nexkit init [--framework express|fastify|none] [--dir src] [--force] [--dry-run]\n  nexkit doctor\n  nexkit generate config [--out src/config/env.ts] [--from .env.example] [--example]\n  nexkit generate middleware [--framework express|fastify] [--out src/nexkit.ts] [--no-health] [--no-ratelimit]\n\nOptions:\n  -h, --help       Show help\n  -v, --version    Show version\n  --force          Overwrite existing files\n  --dry-run        Print what would be written without touching the filesystem\n\nExamples:\n  nexkit init --framework express\n  nexkit generate config --from .env.example\n  nexkit generate middleware --framework fastify --out src/plugins/nexkit.ts\n";
+```
+
+### Types (cli)
+
+#### CliIO
+
+```ts
+interface CliIO {
+    cwd: string;
+    stdout: (line: string) => void;
+    stderr: (line: string) => void;
+    noColor?: boolean;
+}
+```
+
+#### CommandResult
+
+```ts
+interface CommandResult {
+    exitCode: number;
+    files: WriteResult[];
+}
+```
+
+#### DoctorCheck
+
+```ts
+interface DoctorCheck {
+    name: string;
+    status: "pass" | "warn" | "fail";
+    message: string;
+}
+```
+
+#### EnvFieldSpec
+
+```ts
+interface EnvFieldSpec {
+    key: string;
+    type: "string" | "number" | "port" | "boolean" | "url" | "enum" | "list";
+    default?: string | number | boolean | string[];
+    values?: string[];
+    optional?: boolean;
+    description?: string;
+}
+```
+
+#### MiddlewareTemplateOptions
+
+```ts
+interface MiddlewareTemplateOptions {
+    framework: Exclude<Framework, "none">;
+    health?: boolean;
+    rateLimit?: boolean;
+}
+```
+
+#### WriteResult
+
+```ts
+interface WriteResult {
+    path: string;
+    status: "created" | "overwritten" | "skipped" | "dry-run";
+}
+```
+
+#### Framework
+
+Code templates. Pure functions returning file contents so they can be unit tested and reused programmatically.
+
+```ts
+type Framework = "express" | "fastify" | "none";
+```
+
+#### PackageManager
+
+```ts
+type PackageManager = "npm" | "pnpm" | "yarn" | "bun";
+```
+

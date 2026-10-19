@@ -1,0 +1,57 @@
+{
+  "name": "@nexkitjs/config",
+  "version": "0.1.0",
+  "description": "Type-safe environment variable validation with defaults, helpful errors, and secret-safe reporting.",
+  "keywords": [
+    "nexkit",
+    "env",
+    "config",
+    "environment-variables",
+    "validation"
+  ],
+  "license": "MIT",
+  "author": "NexKit contributors",
+  "homepage": "https://github.com/Obiorachibuike/NexKit/tree/main/packages/config#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Obiorachibuike/NexKit.git",
+    "directory": "packages/config"
+  },
+  "bugs": {
+    "url": "https://github.com/Obiorachibuike/NexKit/issues"
+  },
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "!dist/.tsbuildinfo",
+    "README.md",
+    "LICENSE"
+  ],
+  "sideEffects": false,
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "scripts": {
+    "build": "tsc -b",
+    "clean": "node ../../scripts/clean.mjs .",
+    "test": "vitest run --project config"
+  },
+  "dependencies": {
+    "@nexkitjs/core": "0.1.0",
+    "@nexkitjs/errors": "0.1.0"
+  }
+}

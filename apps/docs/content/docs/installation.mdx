@@ -1,0 +1,94 @@
+# Installation
+
+NexKit is published as independent packages under the **`@nexkitjs`** scope. Install only
+what you need; every package declares the others it depends on.
+
+<Callout type="note" title="Why @nexkitjs?">
+  The npm name `nexkit` and the scope `@nexkit` were already registered by unrelated projects
+  when this toolkit was created, so all packages live under `@nexkitjs/*`. The CLI binary is
+  still called `nexkit`.
+</Callout>
+
+## Requirements
+
+| Requirement | Version                                    |
+| ----------- | ------------------------------------------ |
+| Node.js     | **20.0 or newer** (tested on 20, 22, 24)   |
+| Module type | ESM (`"type": "module"` or `.mts` files)    |
+| TypeScript  | 5.x recommended (declarations use TS ≥ 5.0 features) |
+| Express     | `>= 4.18 < 6` for `@nexkitjs/express` (5.x recommended) |
+| Fastify     | `>= 4 < 6` for `@nexkitjs/fastify` (5.x recommended)    |
+
+All packages are **ESM only**. On Node ≥ 20.19 / 22.12 CommonJS projects can `require()`
+them directly thanks to `require(esm)`; on older Node use dynamic `import()`.
+
+## Pick your packages
+
+<Tabs items={["Express", "Fastify", "No framework"]} group="framework">
+<Tab>
+
+```bash
+npm install @nexkitjs/express @nexkitjs/config @nexkitjs/logger @nexkitjs/health @nexkitjs/ratelimit
+```
+
+`@nexkitjs/express` pulls in `core`, `errors`, `response`, `health` and `ratelimit`.
+`express` itself is a peer dependency you already have.
+
+</Tab>
+<Tab>
+
+```bash
+npm install @nexkitjs/fastify @nexkitjs/config @nexkitjs/logger @nexkitjs/health @nexkitjs/ratelimit
+```
+
+`@nexkitjs/fastify` pulls in `core`, `errors`, `response`, `health` and `ratelimit`.
+`fastify` itself is a peer dependency you already have.
+
+</Tab>
+<Tab>
+
+```bash
+npm install @nexkitjs/config @nexkitjs/errors @nexkitjs/logger
+```
+
+Use the core modules in workers, cron jobs, CLIs or any other framework. The adapters are
+~300 lines each — see [Migration](/docs/migration/) for how to wire a different framework.
+
+</Tab>
+</Tabs>
+
+Optional additions:
+
+```bash
+npm install -D @nexkitjs/cli @nexkitjs/testing   # scaffolding + test helpers
+```
+
+## Package manager notes
+
+- **npm / pnpm / yarn / bun** all work; the CLI detects your package manager from the
+  lockfile when it prints install commands.
+- With **pnpm**, peer dependencies are strict: ensure `express` or `fastify` is a direct
+  dependency of your app.
+- NexKit packages have **zero runtime dependencies** outside the scope, so installs are
+  small and audit-friendly.
+
+## Verify the setup
+
+```bash
+npx nexkit doctor
+```
+
+`doctor` checks the Node version, `"type": "module"`, `moduleResolution`, installed
+`@nexkitjs/*` versions (and that they match), peer dependencies, that `.env` is git-ignored
+and that `.env.example` exists. It exits non-zero on failures so you can run it in CI.
+
+## Upgrading
+
+All packages share one version number. Upgrade them together:
+
+```bash
+npm install @nexkitjs/core@latest @nexkitjs/config@latest @nexkitjs/express@latest # …etc
+```
+
+`nexkit doctor` warns when versions drift. Breaking changes are listed in the
+[changelog](https://github.com/Obiorachibuike/NexKit/blob/main/CHANGELOG.md).

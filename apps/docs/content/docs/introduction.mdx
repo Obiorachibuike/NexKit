@@ -1,0 +1,86 @@
+# Introduction
+
+**NexKit** is a modular backend toolkit for Node.js and TypeScript. It gives you the
+infrastructure code that every HTTP service ends up rewriting — configuration validation,
+standardized errors, structured logging, request correlation, health checks, secure headers,
+response envelopes and rate-limit integration — as small packages that share one design.
+
+> Build Better Backends With Less Boilerplate.
+
+## What NexKit is
+
+- **A set of coherent modules.** Eleven `@nexkitjs/*` packages, each with a documented API,
+  strict types and tests. They share a single request-context model, a single error model
+  and a single redaction policy, so they compose instead of colliding.
+- **Framework-agnostic at the core.** `@nexkitjs/core`, `config`, `errors`, `logger`,
+  `health`, `response` and `ratelimit` never import a web framework. The
+  `@nexkitjs/express` and `@nexkitjs/fastify` packages are thin adapters.
+- **Safe by default.** Server error messages are hidden from clients, sensitive fields are
+  redacted from logs, incoming request ids are validated, HSTS and a strict CSP are on.
+  Each default is a one-line opt-out.
+- **Honest about scope.** NexKit integrates with established rate-limit stores instead of
+  shipping a fake distributed limiter, uses no custom cryptography, and documents the
+  limits of key-based redaction.
+
+## What NexKit is not
+
+- **Not a framework.** You keep Express or Fastify (or neither). There is no router, no
+  DI container, no ORM.
+- **Not all-or-nothing.** Install `@nexkitjs/config` alone if that is all you need.
+- **Not a replacement for Helmet, pino, Zod or Redis.** NexKit's pieces are intentionally
+  small and interoperable: logs are plain NDJSON, validation accepts any
+  [Standard Schema](https://standardschema.dev) library, and rate limiting wraps libraries
+  such as `rate-limiter-flexible`.
+
+## A taste
+
+```ts title="src/config/env.ts"
+import { validateEnv } from "@nexkitjs/config";
+
+export const env = validateEnv({
+  PORT: { type: "number", default: 3000 },
+  DATABASE_URL: { type: "url" },
+});
+```
+
+```ts title="src/server.ts"
+import express from "express";
+import { createLogger } from "@nexkitjs/logger";
+import { requestContext, secureHeaders, errorHandler, notFoundHandler } from "@nexkitjs/express";
+import { NotFoundError } from "@nexkitjs/errors";
+import { ok } from "@nexkitjs/response";
+import { env } from "./config/env.js";
+
+const logger = createLogger({ name: "api" });
+const app = express();
+
+app.use(requestContext({ logger }));
+app.use(secureHeaders());
+
+app.get("/users/:id", async (req, res) => {
+  const user = await findUser(req.params.id);
+  if (!user) throw new NotFoundError("User not found");
+  res.json(ok(user));
+});
+
+app.use(notFoundHandler());
+app.use(errorHandler({ logger }));
+app.listen(env.PORT, () => logger.info({ port: env.PORT }, "listening"));
+```
+
+What you get from those twenty lines:
+
+- startup fails with a clear list if `DATABASE_URL` is missing — without printing values;
+- every response carries `X-Request-Id`; every log line carries `requestId`;
+- one structured log entry per request with method, path, status and duration;
+- `NotFoundError` becomes `404 { success: false, error: { code: "NOT_FOUND", … } }`;
+- an unexpected exception becomes a generic `500` for the client and a full, redacted
+  diagnostic (stack, cause, request id) in your logs;
+- a sensible set of security headers.
+
+## Where to go next
+
+- [Installation](/docs/installation/) — requirements and which packages to pick.
+- [Quick start](/docs/quick-start/) — scaffold a service with the CLI in five minutes.
+- [Module directory](/docs/modules/) — what each package does.
+- [Roadmap](/docs/roadmap/) — what is implemented today and known limitations.

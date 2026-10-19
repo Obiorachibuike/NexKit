@@ -1,0 +1,16 @@
+{
+  "files": [],
+  "references": [
+    { "path": "packages/core" },
+    { "path": "packages/errors" },
+    { "path": "packages/config" },
+    { "path": "packages/logger" },
+    { "path": "packages/health" },
+    { "path": "packages/response" },
+    { "path": "packages/ratelimit" },
+    { "path": "packages/testing" },
+    { "path": "packages/express" },
+    { "path": "packages/fastify" },
+    { "path": "packages/cli" }
+  ]
+}

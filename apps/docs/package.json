@@ -1,0 +1,37 @@
+{
+  "name": "@nexkit-apps/docs",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "NexKit documentation website (Next.js + Tailwind CSS).",
+  "scripts": {
+    "prepare:content": "node scripts/build-api-reference.mjs && node scripts/build-search-index.mjs",
+    "build:api": "node scripts/build-api-reference.mjs",
+    "predev": "npm run prepare:content",
+    "dev": "next dev -H 0.0.0.0 -p 3000",
+    "prebuild": "npm run prepare:content",
+    "build": "next build",
+    "start": "npx serve out",
+    "lint": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@mdx-js/loader": "^3.1.0",
+    "@mdx-js/react": "^3.1.0",
+    "@next/mdx": "~15.5.0",
+    "next": "~15.5.0",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "rehype-slug": "^6.0.0",
+    "remark-gfm": "^4.0.1",
+    "sugar-high": "^2.6.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4.1.0",
+    "@types/mdx": "^2.0.13",
+    "@types/react": "^19.1.0",
+    "@types/react-dom": "^19.1.0",
+    "postcss": "^8.5.0",
+    "tailwindcss": "^4.1.0",
+    "typescript": "~5.9.3"
+  }
+}

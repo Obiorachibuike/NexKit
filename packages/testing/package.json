@@ -1,0 +1,58 @@
+{
+  "name": "@nexkitjs/testing",
+  "version": "0.1.0",
+  "description": "Test utilities for applications built with NexKit: log capture, env fixtures, error assertions.",
+  "keywords": [
+    "nexkit",
+    "testing",
+    "vitest",
+    "jest"
+  ],
+  "license": "MIT",
+  "author": "NexKit contributors",
+  "homepage": "https://github.com/Obiorachibuike/NexKit/tree/main/packages/testing#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Obiorachibuike/NexKit.git",
+    "directory": "packages/testing"
+  },
+  "bugs": {
+    "url": "https://github.com/Obiorachibuike/NexKit/issues"
+  },
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "!dist/.tsbuildinfo",
+    "README.md",
+    "LICENSE"
+  ],
+  "sideEffects": false,
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "scripts": {
+    "build": "tsc -b",
+    "clean": "node ../../scripts/clean.mjs .",
+    "test": "vitest run --project testing"
+  },
+  "dependencies": {
+    "@nexkitjs/core": "0.1.0",
+    "@nexkitjs/errors": "0.1.0",
+    "@nexkitjs/logger": "0.1.0",
+    "@nexkitjs/ratelimit": "0.1.0"
+  }
+}

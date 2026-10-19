@@ -1,0 +1,37 @@
+name: Version packages
+
+# Opens/updates a "chore: version packages" pull request from pending changesets.
+# It does NOT publish. Publishing happens in publish.yml when a GitHub Release
+# tagged v<version> is published, using npm trusted publishing (OIDC) — no npm
+# token is stored in this repository.
+
+on:
+  push:
+    branches: [main]
+
+concurrency: version-${{ github.ref }}
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  version:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Create or update the version PR
+        uses: changesets/action@v1
+        with:
+          version: npm run version-packages
+          commit: "chore: version packages"
+          title: "chore: version packages"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

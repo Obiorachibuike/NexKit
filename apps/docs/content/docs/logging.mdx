@@ -1,0 +1,150 @@
+# Logging
+
+`@nexkitjs/logger` writes **structured JSON** (newline-delimited) with levels, child loggers,
+error serialization, automatic request correlation and secret redaction. It is intentionally
+small: it writes to a stream and leaves shipping, rotation and aggregation to your platform.
+
+```bash
+npm install @nexkitjs/logger
+```
+
+## Usage
+
+```ts
+import { createLogger } from "@nexkitjs/logger";
+
+const logger = createLogger({ name: "api", base: { service: "billing", version: "1.4.0" } });
+
+logger.info("server started");
+logger.info({ port: 3000 }, "listening");
+logger.warn({ userId: 42, attempt: 3 }, "login throttled");
+logger.error(err, "payment failed");                      // Error as first argument
+logger.error({ err, orderId }, "payment failed");         // or inside fields
+```
+
+Each call accepts `(message)`, `(fields, message)` or `(error, message)`. Output is one JSON
+object per line:
+
+```json
+{"level":"info","levelValue":30,"time":"2026-10-16T09:00:00.000Z","msg":"listening","name":"api","service":"billing","version":"1.4.0","port":3000}
+```
+
+`levelValue` follows pino's numbering (`trace 10 … fatal 60`) so existing dashboards work.
+
+## Levels
+
+`trace`, `debug`, `info`, `warn`, `error`, `fatal`, and `silent` to disable output. The
+default is `LOG_LEVEL` from the environment, else `info`.
+
+```ts
+createLogger({ level: env.LOG_LEVEL });
+logger.level;           // current level
+logger.isLevelEnabled("debug");
+```
+
+## Child loggers
+
+```ts
+const reqLogger = logger.child({ requestId: req.id, tenant: "acme" });
+reqLogger.info("fetching invoices"); // includes requestId and tenant
+```
+
+Children share the parent's transport, level and redaction configuration and add bindings.
+
+## Request correlation
+
+When `includeContext` is on (default), the logger reads the current request context from
+`@nexkitjs/core` and adds `requestId` and `correlationId` to every entry — no need to pass
+a logger around:
+
+```ts
+// anywhere in the call chain of a request handled by the Express/Fastify adapter
+logger.info("charging card"); // {"…","requestId":"7b1d0c2e-…","correlationId":"order-77",…}
+```
+
+See [Request utilities](/docs/request-utilities/) for how the context is established.
+
+## Error serialization
+
+Errors are serialized with name, message, stack and nested `cause` chain. `AppError`
+instances include `code`, `status`, `details` and redacted `meta`:
+
+```json
+{"level":"error","msg":"payment failed","err":{"name":"AppError","message":"Gateway declined","code":"PAYMENT_DECLINED","status":402,"stack":"AppError: Gateway declined\n    at …","cause":{"name":"Error","message":"card_declined"}}}
+```
+
+Disable stacks with `includeStack: false`; rename the field with `errorKey`.
+
+## Redaction
+
+Fields with sensitive keys are replaced before serialization, at any depth:
+
+```ts
+logger.info({ user: { email: "a@b.c", password: "hunter2" }, headers: { authorization: "Bearer …" } }, "x");
+// "user":{"email":"a@b.c","password":"[REDACTED]"},"headers":{"authorization":"[REDACTED]"}
+```
+
+Default patterns cover `password`, `passwd`, `secret`, `token`, `authorization`, `cookie`,
+`set-cookie`, `api[-_]?key`, `private[-_]?key`, `credit[-_]?card`, `card[-_]?number`, `cvv`,
+`ssn` and similar (`DEFAULT_REDACT_PATTERNS` in `@nexkitjs/core`).
+
+```ts
+createLogger({
+  redact: {
+    keys: ["nationalId", /^x-internal-/i],   // added to defaults
+    valuePatterns: [/Bearer [A-Za-z0-9._-]+/g], // also scrub string values
+    replacement: "***",
+  },
+});
+createLogger({ redact: false }); // opt out entirely
+```
+
+<Callout type="warning" title="Redaction is best-effort">
+  Redaction matches **keys** (and optional value patterns). It cannot recognise a secret
+  that appears inside a free-text message under an innocent key. Use `valuePatterns` for
+  known token formats and avoid interpolating secrets into messages.
+</Callout>
+
+## Transports
+
+```ts
+import { createLogger, jsonTransport, prettyTransport, memoryTransport, multiTransport } from "@nexkitjs/logger";
+
+createLogger({ transport: "json" });                          // NDJSON to stdout (default)
+createLogger({ transport: "pretty" });                        // human-readable, colours when TTY
+createLogger({ transport: jsonTransport(fs.createWriteStream("app.log", { flags: "a" })) });
+createLogger({ transport: [jsonTransport(), prettyTransport({ stream: process.stderr })] });
+
+const mem = memoryTransport();                                // for tests
+createLogger({ transport: mem }); mem.entries;
+```
+
+Write your own by implementing `LogTransport`:
+
+```ts
+interface LogTransport {
+  write(entry: LogEntry): void | Promise<void>;
+  flush?(): void | Promise<void>;
+}
+```
+
+Transport exceptions are caught and passed to `onTransportError` so logging never crashes
+the request. Call `await logger.flush()` during shutdown.
+
+## Choosing a level per request
+
+The adapters log one entry per completed request. By default 5xx → `error`, 4xx → `warn`,
+otherwise `info`. Override with the `level` option of `requestContext` / the Fastify plugin.
+
+## Using pino or winston instead
+
+NexKit only needs an object with `trace…fatal` methods and `child()`. If you already run
+pino, you can pass it wherever a `Logger` is expected, provided it satisfies the `Logger`
+interface (pino does, modulo `flush` semantics). Redaction of request logs then follows your
+logger's configuration, not NexKit's.
+
+## Limitations
+
+- No file rotation, async batching or network shipping — stream to stdout and let the
+  platform collect.
+- Synchronous JSON serialization; for extreme throughput consider pino's worker transports.

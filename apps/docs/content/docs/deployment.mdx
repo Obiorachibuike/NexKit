@@ -1,0 +1,134 @@
+# Deployment
+
+Two things get deployed around NexKit: **your application** and, if you host it, the
+**documentation site**. NexKit adds no runtime requirements beyond Node.js ≥ 20, but its
+modules reward a few deliberate deployment choices.
+
+## Applications
+
+### Configuration
+
+- Validate at startup with `validateEnv`; a misconfigured container exits immediately with a
+  complete, value-free report.
+- Commit `.env.example` (`nexkit generate config --example`), never `.env`. `nexkit doctor`
+  checks the ignore rule.
+- Secrets can arrive as environment variables or files; `validateEnv({ source })` accepts any
+  string map if you load from a secret manager first.
+
+### Logging
+
+- Keep the JSON transport in production; every log collector ingests NDJSON. `levelValue`
+  is pino-compatible for existing dashboards.
+- Set `LOG_LEVEL` per environment; add domain-specific keys to `redact.keys`.
+- Call `await logger.flush()` in the shutdown handler.
+
+### Health probes
+
+| Probe     | Path            | Kubernetes field | Fails when                                |
+| --------- | --------------- | ---------------- | ----------------------------------------- |
+| Liveness  | `/health/live`  | `livenessProbe`  | process deadlocked / unhealthy → restart   |
+| Readiness | `/health/ready` | `readinessProbe` | a critical dependency fails → stop routing |
+
+```yaml
+livenessProbe:
+  httpGet: { path: /health/live, port: 3000 }
+  periodSeconds: 10
+readinessProbe:
+  httpGet: { path: /health/ready, port: 3000 }
+  periodSeconds: 5
+  failureThreshold: 3
+```
+
+Give every check a timeout below the probe period and mark optional dependencies
+`critical: false` so a degraded cache does not evict the instance.
+
+### Reverse proxies
+
+Behind a load balancer, tell the framework to trust it so request logs and rate-limit keys
+see the real client address:
+
+```ts
+app.set("trust proxy", 1);                 // Express — number of trusted hops
+const app = Fastify({ trustProxy: true });  // Fastify
+```
+
+### Rate limiting across instances
+
+Replace the generated `MemoryRateLimitStore` with `createRedisStore(redis)` or
+`adaptRateLimiterFlexible(...)` before scaling past one process. See
+[Rate limiting](/docs/rate-limiting/).
+
+### TLS and HSTS
+
+`secureHeaders()` sends `Strict-Transport-Security` by default. Keep it on when TLS
+terminates at your edge and clients reach the service over HTTPS; disable it
+(`strictTransportSecurity: false`) for plain-HTTP local development, as the CLI template
+does when `isProduction` is false.
+
+### Graceful shutdown
+
+```ts
+const server = app.listen(env.PORT);
+async function shutdown(signal: string) {
+  logger.info({ signal }, "shutting down");
+  server.close(async () => {
+    await logger.flush();
+    process.exit(0);
+  });
+  setTimeout(() => process.exit(1), 10_000).unref();
+}
+process.on("SIGTERM", () => void shutdown("SIGTERM"));
+process.on("SIGINT", () => void shutdown("SIGINT"));
+```
+
+### Dockerfile
+
+```dockerfile title="Dockerfile"
+FROM node:22-alpine AS build
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci
+COPY . .
+RUN npm run build && npm prune --omit=dev
+
+FROM node:22-alpine
+ENV NODE_ENV=production
+WORKDIR /app
+COPY --from=build /app /app
+USER node
+EXPOSE 3000
+HEALTHCHECK --interval=30s --timeout=3s CMD wget -qO- http://127.0.0.1:3000/health/live || exit 1
+CMD ["node", "dist/server.js"]
+```
+
+### Serverless and edge
+
+The core modules (`config`, `errors`, `logger`, `response`, `core`) run anywhere Node APIs
+exist, including AWS Lambda and Vercel Node functions. `AsyncLocalStorage` is available in
+Node and in most edge runtimes. The adapters assume Express/Fastify; for raw handlers see
+[Migration → other frameworks](/docs/migration/#using-nexkit-with-other-frameworks).
+
+## Documentation site
+
+The docs (`apps/docs`) are a Next.js 15 app built with `output: "export"`, producing static
+files in `apps/docs/out`.
+
+```bash
+npm ci
+npm run build:docs          # runs the search-index script, then next build
+npx serve apps/docs/out     # preview
+```
+
+### GitHub Pages
+
+The repository ships `.github/workflows/deploy-docs.yml`. Enable **Settings → Pages →
+Source: GitHub Actions** once; every push to `main` touching `apps/docs/**` deploys. The
+workflow sets `NEXT_PUBLIC_BASE_PATH` from the Pages configuration so the site works under
+`/NexKit/`.
+
+### Vercel, Netlify, Cloudflare Pages, S3
+
+Any static host works. Build command `npm run build:docs` from the repository root (or
+`npm run build` with root directory `apps/docs`), output directory `apps/docs/out`. Leave
+`NEXT_PUBLIC_BASE_PATH` unset on a root domain and set `NEXT_PUBLIC_SITE_URL` for correct
+canonical URLs and sitemap entries.

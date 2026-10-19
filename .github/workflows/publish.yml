@@ -1,0 +1,107 @@
+name: Publish to npm
+
+# Publishes every @nexkitjs/* package when a GitHub Release tagged exactly
+# v<version> is published (e.g. v0.1.1).
+#
+# Authentication uses npm TRUSTED PUBLISHING (OpenID Connect):
+#   - no NPM_TOKEN secret exists or is needed;
+#   - the job runs in the GitHub environment "npm" (required reviewer approval,
+#     deployments restricted to v* tags);
+#   - each package on npmjs.com lists this repository + workflow + environment as
+#     a trusted publisher (see docs/PUBLISHING.md);
+#   - provenance attestations are generated automatically.
+#
+# Re-publishing a version that already exists on npm is a no-op: the package is
+# skipped with a notice. To validate OIDC you must publish a NEW version.
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Run everything except the actual publish"
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publish-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    name: Verify tag and build
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.tag.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Derive version from tag
+        id: tag
+        run: |
+          set -euo pipefail
+          ref="${GITHUB_REF_NAME}"
+          if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" ]]; then
+            ref="$(git describe --tags --exact-match 2>/dev/null || true)"
+            if [[ -z "$ref" ]]; then
+              echo "::error::workflow_dispatch must be run from a v<version> tag (ref: ${GITHUB_REF_NAME})"; exit 1
+            fi
+          fi
+          if [[ ! "$ref" =~ ^v([0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?)$ ]]; then
+            echo "::error::Release tag must look like v<semver> (got '$ref')"; exit 1
+          fi
+          echo "version=${BASH_REMATCH[1]}" >> "$GITHUB_OUTPUT"
+
+      - name: Check every package.json matches the tag
+        run: node scripts/check-release-version.mjs "${{ steps.tag.outputs.version }}"
+
+      - run: npm ci
+      - run: npm run build
+      - run: npm test
+      - run: npm run verify:exports
+
+  publish:
+    name: Publish @nexkitjs/* ${{ needs.verify.outputs.version }}
+    needs: verify
+    runs-on: ubuntu-latest
+    # The "npm" environment supplies required-reviewer approval and the v* tag
+    # policy. Its name must match the trusted-publisher configuration on npm.
+    environment:
+      name: npm
+      url: https://www.npmjs.com/org/nexkitjs
+    permissions:
+      contents: read
+      id-token: write # mint the OIDC token exchanged for a short-lived npm credential
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+          cache: npm
+
+      # Trusted publishing requires npm >= 11.5.1 (Node 22 ships npm 10).
+      - name: Upgrade npm for trusted publishing
+        run: |
+          npm install -g npm@latest
+          npm --version
+
+      - run: npm ci
+      - run: npm run build
+
+      - name: Publish packages (skips versions that already exist)
+        env:
+          DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run && 'true' || 'false' }}
+        run: node scripts/publish-packages.mjs
+
+      - name: Summary
+        if: always()
+        run: cat publish-summary.md >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || true

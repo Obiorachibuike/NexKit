@@ -1,0 +1,51 @@
+{
+  "name": "nexkit-monorepo",
+  "private": true,
+  "version": "0.0.0",
+  "description": "NexKit — Build Better Backends With Less Boilerplate. Modular backend toolkit for Node.js and TypeScript.",
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "packageManager": "npm@10.9.8",
+  "workspaces": [
+    "packages/*",
+    "examples/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "build": "tsc -b tsconfig.build.json",
+    "build:docs": "npm run build --workspace apps/docs",
+    "clean": "node scripts/clean.mjs",
+    "typecheck": "tsc -b tsconfig.build.json --dry && tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "test:examples": "vitest run --project express-example --project fastify-example",
+    "verify:exports": "node scripts/verify-exports.mjs",
+    "verify:pack": "node scripts/smoke-pack.mjs",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "changeset": "changeset",
+    "version-packages": "changeset version",
+    "release": "npm run build && changeset publish",
+    "check": "npm run lint && npm run build && npm run test && npm run verify:exports"
+  },
+  "devDependencies": {
+    "@changesets/cli": "^2.29.0",
+    "@types/node": "^22.15.0",
+    "@vitest/coverage-v8": "^3.2.7",
+    "eslint": "^9.39.5",
+    "eslint-config-prettier": "^10.1.8",
+    "globals": "^16.0.0",
+    "prettier": "^3.5.0",
+    "typescript": "~5.9.3",
+    "typescript-eslint": "^8.40.0",
+    "vitest": "^3.2.7",
+    "zod": "^4.0.0",
+    "tsx": "^4.20.0"
+  }
+}

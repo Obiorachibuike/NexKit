@@ -1,0 +1,56 @@
+{
+  "name": "@nexkitjs/logger",
+  "version": "0.1.0",
+  "description": "Structured JSON logger with levels, child loggers, request correlation, error serialization, and secret redaction.",
+  "keywords": [
+    "nexkit",
+    "logger",
+    "logging",
+    "structured-logging",
+    "json"
+  ],
+  "license": "MIT",
+  "author": "NexKit contributors",
+  "homepage": "https://github.com/Obiorachibuike/NexKit/tree/main/packages/logger#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Obiorachibuike/NexKit.git",
+    "directory": "packages/logger"
+  },
+  "bugs": {
+    "url": "https://github.com/Obiorachibuike/NexKit/issues"
+  },
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "!dist/.tsbuildinfo",
+    "README.md",
+    "LICENSE"
+  ],
+  "sideEffects": false,
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "scripts": {
+    "build": "tsc -b",
+    "clean": "node ../../scripts/clean.mjs .",
+    "test": "vitest run --project logger"
+  },
+  "dependencies": {
+    "@nexkitjs/core": "0.1.0"
+  }
+}

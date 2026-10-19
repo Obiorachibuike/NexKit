@@ -1,0 +1,55 @@
+{
+  "name": "@nexkitjs/errors",
+  "version": "0.1.0",
+  "description": "Standardized application errors with error codes, HTTP status mapping, safe public messages, and serialization helpers.",
+  "keywords": [
+    "nexkit",
+    "errors",
+    "http-errors",
+    "error-handling"
+  ],
+  "license": "MIT",
+  "author": "NexKit contributors",
+  "homepage": "https://github.com/Obiorachibuike/NexKit/tree/main/packages/errors#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Obiorachibuike/NexKit.git",
+    "directory": "packages/errors"
+  },
+  "bugs": {
+    "url": "https://github.com/Obiorachibuike/NexKit/issues"
+  },
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "!dist/.tsbuildinfo",
+    "README.md",
+    "LICENSE"
+  ],
+  "sideEffects": false,
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "scripts": {
+    "build": "tsc -b",
+    "clean": "node ../../scripts/clean.mjs .",
+    "test": "vitest run --project errors"
+  },
+  "dependencies": {
+    "@nexkitjs/core": "0.1.0"
+  }
+}

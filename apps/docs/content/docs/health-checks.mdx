@@ -1,0 +1,134 @@
+# Health checks
+
+`@nexkitjs/health` separates **liveness** ("is the process alive?") from **readiness**
+("can it serve traffic?"), runs every check with a timeout, distinguishes critical from
+non-critical dependencies and produces reports that are safe to expose.
+
+```bash
+npm install @nexkitjs/health
+```
+
+## Registry
+
+```ts
+import { createHealthRegistry, healthStatusCode } from "@nexkitjs/health";
+
+const health = createHealthRegistry({
+  defaultTimeoutMs: 5000,       // per check
+  exposeErrorMessages: false,   // hide thrown messages from reports (default)
+  info: { version: process.env.APP_VERSION ?? "dev" },
+});
+
+health.register("postgres", async (signal) => {
+  await sql`select 1`.execute({ signal });
+}, { timeoutMs: 2000 });
+
+health.register("redis", () => redis.ping().then(() => true), { critical: false });
+
+health.register("event-loop", eventLoopLagCheck({ warnMs: 100, failMs: 1000 }), { probe: "liveness" });
+```
+
+A check receives an `AbortSignal` (aborted on timeout) and may return:
+
+- nothing / `true` → `ok`
+- `false` → `fail`
+- `{ status: "ok" | "degraded" | "fail", message?, details? }`
+- throw → `fail` (message hidden unless `exposeErrorMessages`)
+
+### Check options
+
+| Option      | Default        | Meaning                                                             |
+| ----------- | -------------- | ------------------------------------------------------------------- |
+| `timeoutMs` | registry default | Check fails with `Timed out after …ms` when exceeded               |
+| `critical`  | `true`         | Critical failures make the overall status `fail`; non-critical → `degraded` |
+| `probe`     | `"readiness"`  | `"liveness"`, `"readiness"` or `"both"`                              |
+| `tags`      | —              | Free-form labels included in the report                              |
+
+`register` returns an unregister function; `unregister(name)` and `list()` are also available.
+
+## Reports
+
+```ts
+const report = await health.readiness();
+```
+
+```json
+{
+  "status": "degraded",
+  "probe": "readiness",
+  "timestamp": "2026-10-16T09:00:00.000Z",
+  "uptime": 1234.5,
+  "info": { "version": "1.4.0" },
+  "checks": {
+    "postgres": { "status": "ok", "durationMs": 3.2, "critical": true },
+    "redis": { "status": "fail", "durationMs": 2000.4, "critical": false, "message": "Timed out after 2000ms" }
+  }
+}
+```
+
+Overall status: `fail` if any critical check fails; otherwise `degraded` if anything is
+degraded or a non-critical check fails; otherwise `ok`. `healthStatusCode(report)` maps
+`ok`/`degraded` → **200** and `fail` → **503**.
+
+Checks run **in parallel**; the report takes as long as the slowest (bounded by timeouts).
+
+## HTTP routes
+
+<Tabs items={["Express", "Fastify"]} group="framework">
+<Tab>
+
+```ts
+import { healthRoutes } from "@nexkitjs/express";
+app.use(healthRoutes(health)); // GET /health/live, GET /health/ready
+app.use(healthRoutes(health, { livenessPath: "/livez", readinessPath: "/readyz" }));
+```
+
+</Tab>
+<Tab>
+
+```ts
+await app.register(nexkit, { health });
+await app.register(nexkit, { health: { registry: health, livenessPath: "/livez", readinessPath: "/readyz" } });
+```
+
+</Tab>
+</Tabs>
+
+Responses carry `Cache-Control: no-store`. Register the endpoints in `requestContext.ignore`
+to keep probe traffic out of your request logs (the CLI template does this).
+
+## Built-in checks
+
+```ts
+import { memoryHeapCheck, eventLoopLagCheck } from "@nexkitjs/health";
+
+health.register("heap", memoryHeapCheck(512 * 1024 * 1024), { probe: "liveness", critical: false });
+health.register("loop", eventLoopLagCheck({ warnMs: 200, failMs: 2000 }), { probe: "liveness" });
+```
+
+## Kubernetes example
+
+```yaml
+livenessProbe:
+  httpGet: { path: /health/live, port: 3000 }
+  periodSeconds: 10
+  failureThreshold: 3
+readinessProbe:
+  httpGet: { path: /health/ready, port: 3000 }
+  periodSeconds: 5
+  failureThreshold: 2
+```
+
+Keep liveness checks free of external dependencies: a database outage should take the
+instance out of rotation (readiness), not restart it in a loop (liveness).
+
+## Testing
+
+```ts
+import { healthCheckStub } from "@nexkitjs/testing";
+
+health.register("slow", healthCheckStub({ delayMs: 50 }), { timeoutMs: 10 });
+const report = await health.readiness();
+expect(report.checks.slow.status).toBe("fail");
+expect(report.checks.slow.message).toMatch(/Timed out/);
+```

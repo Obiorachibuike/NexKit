@@ -1,0 +1,192 @@
+# Migration
+
+NexKit is designed to be adopted **incrementally**. Nothing requires a rewrite: each module
+replaces one piece of hand-rolled infrastructure and leaves the rest of your app untouched.
+This page shows typical before/after steps for an existing Express or Fastify codebase.
+
+## Suggested order
+
+1. **Configuration** — replace ad-hoc `process.env` reads with `validateEnv`.
+2. **Errors + error handler** — standardize the response envelope.
+3. **Logger + request context** — structured logs with request ids.
+4. **Secure headers, size limits, health routes** — mostly additive.
+5. **Validation** — switch to `validateRequest` route by route.
+6. **Rate limiting** — wrap what you already use.
+
+Run `npx nexkit doctor` at any point to check ESM/TypeScript settings.
+
+## Step 1 — Configuration
+
+**Before**
+
+```ts
+const port = parseInt(process.env.PORT || "3000");
+const dbUrl = process.env.DATABASE_URL;
+if (!dbUrl) throw new Error("DATABASE_URL missing");
+```
+
+**After**
+
+```bash
+npx nexkit generate config --from .env.example   # infers a schema from your existing file
+```
+
+```ts
+import { env } from "./config/env.js";
+env.PORT;          // number, validated
+env.DATABASE_URL;  // string, validated as a URL
+```
+
+Keep `dotenv` or `node --env-file` if you use them; `validateEnv` reads `process.env`.
+
+## Step 2 — Errors
+
+**Before**
+
+```ts
+class HttpError extends Error { constructor(public status: number, msg: string) { super(msg); } }
+
+app.use((err, req, res, next) => {
+  console.error(err);
+  res.status(err.status || 500).json({ message: err.message });
+});
+```
+
+**After**
+
+```ts
+import { NotFoundError, AppError } from "@nexkitjs/errors";
+import { errorHandler, notFoundHandler } from "@nexkitjs/express";
+
+app.use(notFoundHandler());
+app.use(errorHandler({ logger }));
+```
+
+Keep throwing your old `HttpError` for now: `normalizeError` recognises numeric `status`
+properties and maps them, exposing the message only for 4xx. Migrate call sites to NexKit
+classes (or subclass `AppError`) as you touch them.
+
+If clients depend on your old response shape, use `formatBody`:
+
+```ts
+errorHandler({ logger, formatBody: (err) => ({ message: err.publicMessage, code: err.code }) });
+```
+
+## Step 3 — Logging and request ids
+
+**Before**
+
+```ts
+import morgan from "morgan";
+import { v4 as uuid } from "uuid";
+
+app.use((req, res, next) => { req.id = req.headers["x-request-id"] || uuid(); res.setHeader("x-request-id", req.id); next(); });
+app.use(morgan("combined"));
+console.log("user created", user);  // unstructured; may print secrets
+```
+
+**After**
+
+```ts
+import { createLogger } from "@nexkitjs/logger";
+import { requestContext } from "@nexkitjs/express";
+
+const logger = createLogger({ name: "api" });
+app.use(requestContext({ logger }));          // replaces both snippets above
+logger.info({ userId: user.id }, "user created");
+```
+
+If you already use **pino**, you can keep it: pass it anywhere a `Logger` is expected (its
+interface is compatible) and only adopt NexKit's request context.
+
+## Step 4 — Headers, limits, health
+
+**Before**
+
+```ts
+app.use(helmet());
+app.get("/healthz", (req, res) => res.send("ok"));
+```
+
+**After**
+
+```ts
+app.use(secureHeaders());         // or keep helmet — do not use both
+app.use(requestSizeLimit({ maxBytes: "1mb" }));
+app.use(healthRoutes(health));    // /health/live and /health/ready with real checks
+```
+
+Helmet is excellent; `secureHeaders` exists so that you do not *need* another dependency and
+so the same defaults apply to Fastify. If you keep Helmet, skip `secureHeaders`.
+
+## Step 5 — Validation
+
+**Before**
+
+```ts
+app.post("/users", (req, res) => {
+  const parsed = CreateUser.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ errors: parsed.error.flatten() });
+  …
+});
+```
+
+**After**
+
+```ts
+app.post("/users", validateRequest({ body: CreateUser }), (req, res) => {
+  const { body } = getValidated<z.infer<typeof CreateUser>>(req);
+  …
+});
+```
+
+Error shape becomes the standard `422 VALIDATION_ERROR` envelope with paths and messages only.
+
+## Step 6 — Rate limiting
+
+**Before** (`express-rate-limit` with the default memory store)
+
+```ts
+app.use(rateLimit({ windowMs: 60_000, max: 100 }));
+```
+
+**After**
+
+```ts
+import { RateLimiterRedis } from "rate-limiter-flexible";
+import { adaptRateLimiterFlexible } from "@nexkitjs/ratelimit";
+import { rateLimit } from "@nexkitjs/express";
+
+const limiter = adaptRateLimiterFlexible(new RateLimiterRedis({ storeClient: redis, points: 100, duration: 60 }));
+app.use(rateLimit({ limiter }));
+```
+
+If you already have `express-rate-limit` with a Redis store you are happy with, keep it —
+NexKit's value here is a consistent 429 envelope and headers, not a new algorithm.
+
+## Fastify specifics
+
+| Before                               | After                                                     |
+| ------------------------------------ | --------------------------------------------------------- |
+| `fastify({ logger: true })` request logs | `Fastify({ logger: false, genReqId: requestIdGenerator() })` + plugin `logger` |
+| `@fastify/helmet`                    | plugin `secureHeaders` (or keep helmet and pass `secureHeaders: false`) |
+| `setErrorHandler` custom             | plugin `errorHandler` with `formatBody` for legacy shapes |
+| `@fastify/rate-limit`                | keep, or plugin `rateLimit` with a `RateLimiter`          |
+| `@fastify/under-pressure`            | `health.register("loop", eventLoopLagCheck())` + readiness route |
+
+Fastify's native JSON Schema validation keeps working; its errors are normalized into the
+NexKit envelope automatically.
+
+## Using NexKit with other frameworks
+
+The core packages have no framework dependency. To support Koa, Hono, Node's `http` or a
+serverless handler you need to:
+
+1. Resolve ids with `resolveRequestId(incomingHeader)` and run the handler inside
+   `runWithRequestContext(createRequestContext({ requestId, correlationId }), …)`.
+2. Apply `secureHeaders()` to the response.
+3. Catch errors, call `normalizeError`, log `serializeError(err)`, respond with
+   `errorBody(err)` and `err.status`/`err.headers`.
+4. Call `health.liveness()` / `health.readiness()` from two routes.
+
+The Express adapter is a few hundred lines and makes a good template.

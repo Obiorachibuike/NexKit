@@ -1,0 +1,96 @@
+# Publishing
+
+How the `@nexkitjs/*` packages are versioned and released. This is mostly relevant to
+maintainers, but it also explains the compatibility guarantees users can expect.
+
+## Package names
+
+| Package              | npm name              |
+| -------------------- | --------------------- |
+| Core primitives      | `@nexkitjs/core`      |
+| Config validation    | `@nexkitjs/config`    |
+| Errors               | `@nexkitjs/errors`    |
+| Logger               | `@nexkitjs/logger`    |
+| Health checks        | `@nexkitjs/health`    |
+| API responses        | `@nexkitjs/response`  |
+| Rate limiting        | `@nexkitjs/ratelimit` |
+| Express adapter      | `@nexkitjs/express`   |
+| Fastify adapter      | `@nexkitjs/fastify`   |
+| Test utilities       | `@nexkitjs/testing`   |
+| CLI (`nexkit` binary)| `@nexkitjs/cli`       |
+
+<Callout type="note" title="Why not @nexkit?">
+  The unscoped name `nexkit` and the `@nexkit` scope were already registered on npm by
+  unrelated parties. `@nexkitjs` was available. If you fork under another scope, replace
+  `@nexkitjs/` across the repository and update `scripts/expected-exports.json`.
+</Callout>
+
+## Versioning
+
+- All packages share **one version** (a Changesets "fixed" group). `@nexkitjs/express@x.y.z`
+  is always tested against `@nexkitjs/core@x.y.z`.
+- On `0.x`, minor releases may include breaking changes, always listed in the changelog.
+  From `1.0.0`, the documented API follows SemVer.
+- Node support: `>= 20`. The minimum will only move in a minor release with a changelog note,
+  after the version reaches end-of-life.
+
+## Release flow
+
+Publishing uses **npm trusted publishing (OpenID Connect)** from GitHub Actions. No npm token
+is stored in the repository.
+
+```
+changeset in PR → merge → "chore: version packages" PR → merge → GitHub Release v<version> → publish.yml → npm
+```
+
+1. Contributors add a changeset with their PR (`npm run changeset`).
+2. On merge to `main`, the **Version packages** workflow (`release.yml`) opens or updates a
+   *chore: version packages* PR that bumps versions and writes `CHANGELOG.md`. It never publishes.
+3. Merge that PR, then publish a **GitHub Release tagged exactly `v<version>`** on the merge
+   commit (`gh release create v0.1.1 --target main --generate-notes`).
+4. The **Publish to npm** workflow (`publish.yml`) checks that every `package.json` matches the
+   tag, builds and tests, then waits in the `npm` GitHub environment for a required reviewer
+   to approve. After approval it publishes all packages in dependency order with provenance.
+
+Packages whose version already exists on npm are **skipped** and reported as a no-op, so
+re-running a release is safe — but validating OIDC requires a new version.
+
+### One-time setup
+
+- The first version of each package must be published once from a maintainer machine
+  (`node scripts/publish-packages.mjs`): npm only allows trusted publishers on existing packages.
+- Create the GitHub environment `npm` with a required reviewer and a `v*` tag deployment rule
+  (`scripts/setup-npm-environment.sh`).
+- On npmjs.com, for each package, add a trusted publisher: owner `Obiorachibuike`, repository
+  `NexKit`, workflow `publish.yml`, environment `npm`, allowed action *Direct npm publish*.
+
+Full instructions, a dry-run mode and recovery steps live in
+[`docs/PUBLISHING.md`](https://github.com/Obiorachibuike/NexKit/blob/main/docs/PUBLISHING.md).
+
+## Manual release (emergency fallback)
+
+```bash
+npm ci
+npm run check            # lint + build + tests + export verification
+npm run verify:pack      # pack → install tarballs into a fresh project → smoke app + CLI
+npm login                # maintainer account with 2FA
+node scripts/publish-packages.mjs   # dependency order, skips versions already on npm
+```
+
+## What a tarball contains
+
+```
+dist/         ESM JavaScript, .d.ts, source maps
+README.md
+LICENSE
+package.json  type: module, exports map, engines, publishConfig.access: public
+```
+
+Source `.ts`, tests and configs are excluded by `files`. The `verify:pack` script installs
+the real tarballs into a temporary project outside the monorepo and runs an Express + Fastify
+smoke app plus the CLI, so broken `exports` maps or missing files fail before publishing.
+
+## Deprecation policy
+
+Prefer `npm deprecate @nexkitjs/<name>@<range> "<message>"` over unpublishing, which npm
+restricts and which breaks lockfiles.

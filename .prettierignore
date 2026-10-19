@@ -1,0 +1,10 @@
+node_modules
+dist
+.next
+out
+coverage
+package-lock.json
+CHANGELOG.md
+apps/docs/public/search-index.json
+apps/docs/content/docs/api-reference.mdx
+apps/docs/content/docs/*.mdx

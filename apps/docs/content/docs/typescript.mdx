@@ -1,0 +1,114 @@
+# TypeScript
+
+NexKit is written in strict TypeScript and ships `.d.ts` files for every package. This page
+collects the type-level features and the project settings that make them work.
+
+## Recommended tsconfig
+
+```json title="tsconfig.json"
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "strict": true,
+    "exactOptionalPropertyTypes": true,
+    "verbatimModuleSyntax": true,
+    "outDir": "dist",
+    "rootDir": "src"
+  }
+}
+```
+
+`"type": "module"` in `package.json` and `moduleResolution: "NodeNext"` (or `"Bundler"`)
+are required to resolve the packages' `exports` maps. `nexkit doctor` checks both.
+
+## Environment inference
+
+```ts
+import { defineEnvSchema, validateEnv, type InferEnv } from "@nexkitjs/config";
+
+const schema = defineEnvSchema({
+  NODE_ENV: { type: "enum", values: ["development", "production"], default: "development" },
+  PORT: { type: "port", default: 3000 },
+  REDIS_URL: { type: "url", optional: true },
+  FLAGS: { type: "json", default: {}, validate: (v): v is Record<string, boolean> => typeof v === "object" && v !== null },
+});
+
+type Env = InferEnv<typeof schema>;
+//   ^? { readonly NODE_ENV: "development" | "production"; readonly PORT: number;
+//        readonly REDIS_URL: string | undefined; readonly FLAGS: Record<string, boolean> }
+```
+
+Enum values stay literal, `optional` becomes `| undefined`, `json` with a type guard narrows,
+`custom` infers from `parse`'s return type. The result is `Readonly`.
+
+## Request validation with inference
+
+```ts
+import { z } from "zod";
+import { validateRequest, getValidated } from "@nexkitjs/express";
+
+const Body = z.object({ email: z.string().email(), age: z.coerce.number().int().optional() });
+type Body = z.infer<typeof Body>;
+
+app.post("/signup", validateRequest({ body: Body }), (req, res) => {
+  const { body } = getValidated<Body>(req);
+  body.age; // number | undefined — coerced, not a string
+});
+```
+
+`validateRequest` accepts any **Standard Schema v1** object; the `StandardSchemaV1` type is
+exported from `@nexkitjs/core` if you want to write adapters or generic helpers:
+
+```ts
+import { parseWith, type StandardSchemaV1 } from "@nexkitjs/core";
+
+async function loadJson<S extends StandardSchemaV1>(schema: S, path: string): Promise<StandardSchemaV1.InferOutput<S>> {
+  const result = await parseWith(schema, JSON.parse(await readFile(path, "utf8")));
+  if (!result.success) throw new ValidationError(result.issues, `Invalid ${path}`);
+  return result.data;
+}
+```
+
+## Typed responses
+
+```ts
+import type { ApiResponse, PaginatedResponse } from "@nexkitjs/response";
+
+type UserResponse = ApiResponse<User>;
+type UsersPage = PaginatedResponse<User>;
+```
+
+Share these with a frontend to type `fetch` results end-to-end.
+
+## Error narrowing
+
+```ts
+import { isAppError, NotFoundError } from "@nexkitjs/errors";
+
+try { … } catch (err) {
+  if (err instanceof NotFoundError) …          // class check
+  if (isAppError(err) && err.code === "PLAN_LIMIT") … // cross-realm safe check
+}
+```
+
+`isAppError` uses a symbol marker so it works even when two copies of the package exist.
+
+## Logger typing
+
+`Logger` is an interface; `createLogger` returns it, and test doubles or pino can satisfy
+it. Log methods are overloaded: `(msg)`, `(fields, msg)`, `(error, msg)`.
+
+## ESM notes
+
+- All packages are ESM only. Use `import`, not `require`, or rely on `require(esm)` on
+  Node ≥ 20.19 / 22.12.
+- Relative imports in your own code need explicit `.js` extensions under `NodeNext`.
+- `tsx`, `vitest`, Node's `--experimental-strip-types` (Node ≥ 22.6) and bundlers all work.
+
+## Declaration quality
+
+Declarations are generated with `declaration: true` + `declarationMap: true` and checked in
+CI by `scripts/verify-exports.mjs`, which asserts that every runtime export is mentioned in
+the `.d.ts` output and that `exports` map entries resolve.
